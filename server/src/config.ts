@@ -13,6 +13,10 @@ const envSchema = z.object({
   AI_MONTHLY_BUDGET_USD: z.coerce.number().min(0).default(5),
   AI_TRIAGE_INPUT_USD: z.coerce.number().positive().default(0.30), AI_TRIAGE_OUTPUT_USD: z.coerce.number().positive().default(2.50),
   AI_EXTRACTION_INPUT_USD: z.coerce.number().positive().default(0.75), AI_EXTRACTION_OUTPUT_USD: z.coerce.number().positive().default(3.75),
+  WHATSAPP_APP_SECRET: z.union([z.literal(''), z.string().min(32).max(256)]).default(''),
+  WHATSAPP_VERIFY_TOKEN: z.union([z.literal(''), z.string().min(32).max(256)]).default(''),
+  WHATSAPP_OWNER_SENDER_ID: z.union([z.literal(''), z.string().regex(/^[A-Za-z0-9_.:-]{3,128}$/)]).default(''),
+  WHATSAPP_PHONE_NUMBER_ID: z.union([z.literal(''), z.string().regex(/^\d{1,40}$/)]).default(''),
 });
 export type Config = z.infer<typeof envSchema>;
 export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -29,3 +33,4 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return result.data;
 }
 export const googleConfigured = (config: Config) => Boolean(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET);
+export const whatsappConfigured = (config: Config) => Boolean(config.WHATSAPP_APP_SECRET && config.WHATSAPP_VERIFY_TOKEN && config.WHATSAPP_OWNER_SENDER_ID && config.WHATSAPP_PHONE_NUMBER_ID);

@@ -1,6 +1,6 @@
 # Personal calendar — implementation plan
 
-Updated: 7 September 2026. The private Edge calendar and always-on backend are deployed; the original ten design studies are preserved. Calendar/API checks, the selected model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, and the initial import is running with paced reads after a quota-related interruption. Real suggestions are available in Review.
+Updated: 7 September 2026. The private Edge calendar and always-on backend are deployed; the original ten design studies are preserved. Calendar/API checks, the selected model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected; the initial import has completed and hourly checks are active. The next spike evaluates WhatsApp forwarding without another number to buy or manage. Real suggestions are available in Review.
 
 ## Objective
 
@@ -12,12 +12,12 @@ Rory directs the product and design with Codex implementing the design, frontend
 
 ## Verified progress
 
-- The Edge personal frontend, owner-restricted Sites API bridge, encrypted calendar storage, manual event forms, and proposal review flows are implemented. The personal calendar starts empty; fictional bookings stay in the design studies.
+- The Edge personal frontend, owner-restricted Vercel API bridge with Google identity sign-in, encrypted calendar storage, manual event forms, and proposal review flows are implemented. The personal calendar starts empty; fictional bookings stay in the design studies.
 - Local API checks passed for manual creation, editing, clearing optional fields, rejecting stale revisions with HTTP 409, deletion, and owner/origin restrictions. These establish the local API flow; they do not establish production access or actual iPhone behaviour.
 - **53 backend tests pass** using synthetic data. They cover calendar/proposal operations, Gmail capture and recovery, OAuth safeguards, parsing, queue failures, retention, and budget controls. Real inbox quality still needs evaluation.
 - Two live OpenRouter calls using fictional booking text passed: Gemini 3.5 Flash Lite triage and Gemini 3.6 Flash extraction. Strict structured output and the configured provider restrictions were accepted; the combined provider-reported cost was **$0.00507645**. This establishes model/API compatibility, not a monthly cost forecast or real-mail accuracy.
-- The owner-private Sites app and isolated Hetzner backend are live. Hosted connection state and OAuth initiation work; trusted HTTPS, unauthenticated API rejection, and SQLite persistence through a service restart were verified. See [deployment notes](ops/README.md).
-- Google OAuth is configured for ongoing personal use and read-only Gmail. The owner completed consent and the expected Gmail profile was verified; see [Google setup and handoff](ops/google-setup.md). The saved import recovered successfully and continued automatically. The remaining import and real-mail quality checks continue; live mailbox counts stay in the private app. WhatsApp and the iPhone feed remain unverified. Implementation details and the model smoke record are in [server/README.md](server/README.md).
+- The private Next.js app on Vercel and isolated Hetzner backend are live; source is published at Rorylm1/calendar. Hosted connection state and OAuth initiation work; trusted HTTPS, unauthenticated API rejection, and SQLite persistence through a service restart were verified. See [deployment notes](ops/README.md).
+- Google OAuth is configured for ongoing personal use and read-only Gmail. The owner completed consent and the expected Gmail profile was verified; see [Google setup and handoff](ops/google-setup.md). The saved import completed, a Gmail history checkpoint is present, and hourly checks continue. Captured interpretation failures remain available for retry; real-mail quality acceptance continues; live mailbox counts stay in the private app. WhatsApp and the iPhone feed remain unverified. Implementation details and the model smoke record are in [server/README.md](server/README.md).
 
 ## 1. Agreed scope
 
@@ -49,17 +49,17 @@ Forwarding means **“please look at this”**, not **“I am attending.”** An
 
 ### Integration approach
 
-- Use the **official Meta WhatsApp Cloud API** with a separate receiving number and a webhook on Hetzner. Use a Meta test number for the first integration check, then register a dedicated production number.
-- This requires Meta developer/WhatsApp Business setup and a number eligible for registration. A normal WhatsApp account or the “message yourself” chat alone does not expose an incoming-message API.
-- The receiving number must not currently be active on WhatsApp or the WhatsApp Business app, so the personal number is ineligible without deregistration. Budget a fresh pay-as-you-go SIM that can receive one verification code.
-- An unverified Meta business portfolio is expected to suffice. Its published cap applies to business-initiated conversations, which this app does not send; captures are user-initiated and replies fall inside the service window. Business verification only raises sending tiers, so treat it as unnecessary until proven otherwise.
-- The personal WhatsApp number remains the sender. There is no Baileys dependency, linked-device session, scraping, or background access to personal chats.
-- Receive WhatsApp deliveries through webhooks; do not poll WhatsApp. Verify webhook signatures, allow only Rory's configured sender identity, and ignore delivery-status notifications as capture input.
-- Persist each accepted message before acknowledging the webhook. Use provider message IDs to make retries harmless and queue processing durably.
-- Briefly debounce consecutive forwarded messages for processing, but only combine their contents into one event when the text supports that relationship.
-- Send at most one acknowledgement per capture batch, only inside the permitted reply window. Use interactive reply buttons so an unambiguous suggestion can be confirmed or dismissed without leaving WhatsApp. Fall back to a link to the review inbox when fields are unresolved, when the association with an existing booking is unclear, or when the reply window has closed.
-- Treat a button press as the same transactional, idempotent confirmation as a tap in the web app, recorded against the same proposal. Repeated presses must not create duplicates.
-- Deliver scheduled event reminders through the ICS feed's event alarms, not through WhatsApp.
+**Updated constraint:** Rory does not want another phone number to buy or manage. The current spike uses only a Meta-provided test receiver if available. It does not authorize buying a number, moving the personal WhatsApp account, or assuming a test asset is a permanent service. See [WhatsApp spike findings](docs/whatsapp-spike.md).
+
+- Use the **official Meta WhatsApp Cloud API** with a signed webhook on the existing backend. A receiving calendar contact is needed for forwarding inside WhatsApp; the test contact would be supplied by Meta.
+- Meta developer/WhatsApp Business setup still applies. A normal personal WhatsApp account or its self-chat does not expose this incoming-message API.
+- A production Cloud API receiver needs an eligible business number. Coexistence is a distinct option for eligible WhatsApp Business App onboarding, not a way to silently attach the personal account; its eligibility is unverified here. The previous assumption that Rory should buy a fresh SIM is superseded.
+- Confirm actual account eligibility in Meta's dashboard. Do not assume that business verification, test assets or ongoing access will be granted.
+- Keep the personal account as sender. Receive webhook deliveries without polling, verify exact-body signatures, and allow only the configured sender and receiver IDs.
+- Persist each accepted message in an encrypted spike inbox before acknowledging the webhook. Deduplicate retries by provider message ID. Record unsupported media without downloading it.
+- Keep this receiving proof separate from Gmail interpretation. A successful capture is not a proposal, attendance confirmation or calendar event.
+- Later work can add careful grouping, interpretation, shared review/confirmation and explicit in-chat replies within Meta's allowed window. Outgoing messages and automatic replies are not part of the receiving spike.
+- If the supplied test receiver proves unsuitable without additional number administration, assess copying selected text into an authenticated capture form. Do not claim that iPhone WhatsApp can share selected text into a Shortcut until demonstrated on the device.
 
 ### Context limitations
 
@@ -69,11 +69,11 @@ In particular, “tomorrow at seven” in a forwarded message needs clarificatio
 
 ### Cost and feasibility
 
-Direct Cloud API is the default to avoid a separate messaging provider's markup. Budget for the dedicated number, AI processing, and any applicable Meta messaging charges. Meta's pricing overview currently describes free service replies within a 24-hour user-initiated window, but production costs must be checked against the effective rate card before launch; do not promise that the integration is permanently free. [Meta pricing](https://whatsappbusiness.com/products/platform-pricing/)
+Direct Cloud API is the default to avoid a separate messaging provider's markup. Do not provision a paid number under the current constraint. Distinguish test setup from future AI processing and any applicable Meta messaging charges. Meta's pricing overview currently describes free service replies within a 24-hour user-initiated window, but production costs must be checked against the effective rate card before launch; do not promise that the integration is permanently free. [Meta pricing](https://whatsappbusiness.com/products/platform-pricing/)
 
-Twilio is an alternative to revisit if direct onboarding is disproportionately difficult, not an additional dependency for v1. Its published handling fee is currently $0.005 per inbound or outbound WhatsApp message, before applicable Meta fees and number costs. [Twilio pricing](https://www.twilio.com/en-us/whatsapp/pricing)
+A messaging intermediary would add another service to manage and does not automatically solve the receiving-number requirement. Reconsider one only if its concrete benefit fits the no-extra-number constraint.
 
-The first milestone proves that the dedicated receiver can accept real forwarded messages and establishes the actual setup requirements and costs. If official onboarding is unavailable, report that limitation; do not quietly restore an unofficial personal-account connection.
+The first milestone must prove that the supplied test receiver accepts a real forward and establish whether it fits the no-extra-number constraint; until then it remains a feasibility spike. If official onboarding is unavailable, report that limitation; do not quietly restore an unofficial personal-account connection.
 
 ## 3. Gmail: hourly capture with useful filtering
 
@@ -160,17 +160,17 @@ Use one concise extraction instruction and a clear output schema. The initial ch
 - Event and review dialogs show booking details, editable fields, and supporting evidence. Booking references are easy to copy; missing times remain explicit.
 - Use larger layouts on desktop without turning the app into an administrative dashboard. Support keyboard navigation, readable contrast, reduced motion, and comfortable touch targets.
 - Installable Home Screen web app.
-- Deliver timed-event reminders as event alarms inside the ICS feed, so iOS raises them natively with no push infrastructure. Default reminder is 15 minutes before a timed event, editable per event. Date-only bookings get no invented time-based reminder.
-- Web push is reserved for grouped new-suggestion alerts, and may be deferred beyond v1 without weakening the product. If it is built, show useful behaviour when notifications are denied. [iPhone web-push support](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)
+- Plan timed-event reminders as event alarms inside the ICS feed; Apple supports subscription alerts, but our feed refresh and alarm behaviour still need actual iPhone tests. Default reminder is 15 minutes before a timed event, editable per event. Date-only bookings get no invented time-based reminder.
+- iPhone Web Push is feasible for an installed Home Screen app on iOS 16.4+, after an explicit permission tap. Start with grouped new-suggestion alerts if wanted; event push reminders are an open preference and should not duplicate Calendar alarms. No push delivery is implemented yet. See [iPhone notification findings](docs/iphone-notifications.md). If built, show useful behaviour when notifications are denied. [iPhone web-push support](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)
 - Public demo uses fictional bookings and conversations, with no route to personal credentials, messages, or data.
 
 ### Technical shape
 
-- **Web app:** React with Sites. The functional `/calendar` route uses an owner-restricted server API bridge; the original fictional design studies remain available for comparison. Verify hosted access and keep personal data out of any public showcase.
-- **Backend:** the TypeScript/SQLite service and durable processing queue run locally, with hourly Gmail synchronization implemented. Deployment to the existing Hetzner server is being prepared; the WhatsApp webhook is later work.
+- **Web app:** Next.js/React on Vercel. The functional `/calendar` route uses Google identity sign-in and an owner-restricted server API bridge; the original fictional design studies remain available at `/designs`. Verify hosted access and keep personal data out of any public showcase.
+- **Backend:** the TypeScript/SQLite service runs continuously on the existing Hetzner server, with encrypted storage, hourly Gmail checks and a completed initial import. The official WhatsApp receiving spike is the next integration proof.
 - **Calendar feed, pending:** a read-only ICS endpoint at an unguessable path, serving confirmed events with stable UIDs, revision-bumped sequences, correct date-only versus zoned-timed values, and event alarms. Cancelled events leave the feed. This is the planned reminder mechanism and route into the iPhone Calendar app; actual device behaviour still needs verification.
 - **Separation:** use a dedicated calendar service account, process, database, and configuration alongside other services. Verify server capacity, service isolation, and HTTPS access as part of deployment; preparing deployment does not establish production readiness.
-- **Access:** browser requests pass through authenticated Sites server routes; the deployed bridge will call the backend over HTTPS with a server-only credential. The later WhatsApp webhook will be a separate public endpoint authenticated by Meta signatures.
+- **Access:** browser requests pass through authenticated Next.js server routes; the Vercel bridge calls the backend over HTTPS with a server-only credential. The WhatsApp webhook is a separate endpoint authenticated by Meta signatures and disabled until its exact receiver settings are supplied.
 - **AI:** OpenRouter's stateless Responses API, using `google/gemini-3.5-flash-lite` for triage and `google/gemini-3.6-flash` for extraction. Requests use concise instructions, bounded context, `store: false`, strict JSON-schema output, and no action tools. Provider routing requires parameter support and sets `data_collection: deny`; if no eligible provider is available, processing fails visibly rather than relaxing these settings. Application validation remains necessary. [Responses API](https://openrouter.ai/docs/api/reference/responses/overview), [structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs)
 - **AI budget:** enforce a configurable **$5 monthly guard**. Reserve a conservative cost allowance before each request and settle against reported cost or configured token rates. Retain the reservation when the network outcome is uncertain. Pause interpretation visibly at the limit while capture and manual calendar operations remain available. Model changes require explicit price configuration.
 - **Privacy:** encrypt credentials, source content, calendar records, and proposal evidence; keep keys separate from data and message bodies out of operational logs. Completed source bodies and triage excerpts expire after 14 days, including when Gmail needs reconnecting. Pending/failed captures remain until handled, and proposal evidence remains available for review. OpenRouter's non-collecting provider filter relies on its published provider policies; it is not an independent guarantee of every provider's retention practices.
@@ -204,15 +204,16 @@ Confirming a proposal is transactional and idempotent. Stale proposals cannot ov
 
 ## 8. Build order and verification
 
-Rory chose Gmail as the next priority after selecting Edge. The calendar foundation and Gmail implementation now proceed together; the earlier WhatsApp-first and feed-before-capture ordering is superseded.
+Gmail and the calendar foundation are deployed. Rory has now requested a WhatsApp spike and an iPhone push assessment. Prove a no-extra-owned-number receiver next, while retaining the iPhone feed and real-device notification tests as separate deliverables.
 
 1. **Establish the calendar foundation.** Edge, the local personal API, encrypted storage, manual event operations, and reviewed proposals are implemented. Preserve the fictional studies and complete Rory's review of the functional app.
 2. **Connect the authorized account.** Google configuration, owner consent, and the expected Gmail profile have been verified through the private deployment.
 3. **Verify real Gmail capture and interpretation.** Test the initial scan, hourly/resumable sync, attendance, each booking type, duplicates, amendments, and cancellation review using real or appropriately sanitized examples. The live synthetic model calls do not complete this step.
-4. **Add the iPhone feed.** Subscribe the actual iPhone and verify date-only/zoned events, additions, edits, cancellations, and alarm behaviour. This remains required for the complete daily-use milestone, but does not block beginning Gmail work.
-5. **Prove and complete WhatsApp capture.** Timebox official receiver onboarding to one evening, then implement durable capture, provenance, follow-up matching, and shared confirmation. Record setup limits; do not substitute an unofficial personal-account connection.
-6. **Harden operations.** Restart recovery, OAuth expiration, partial failures, backup/restore, and the AI budget cap. Add grouped-suggestion web push only if the ICS alarms prove insufficient.
-7. **Use privately, then publish the fictional demo.** Judge usefulness by correction effort and missed relevant items.
+4. **Spike WhatsApp without another owned number.** Test Meta-provided assets within the timebox. Complete signature, sender restriction and durable-capture checks locally; a real forward and ongoing usability remain mandatory acceptance checks.
+5. **Add the iPhone feed and chosen notifications.** Subscribe the actual iPhone and verify date-only/zoned events, additions, edits, cancellations, and alarm behaviour. This remains required for the complete daily-use milestone, but does not block beginning Gmail work.
+6. **Complete WhatsApp capture after feasibility passes.** Timebox official receiver onboarding to one evening, then implement durable capture, provenance, follow-up matching, and shared confirmation. Record setup limits; do not substitute an unofficial personal-account connection.
+7. **Harden operations.** Restart recovery, OAuth expiration, partial failures, backup/restore, and the AI budget cap. Choose review-alert push independently of event alarms; test the selected reminder channel on the actual phone.
+8. **Use privately, then publish the fictional demo.** Judge usefulness by correction effort and missed relevant items.
 
 ### Acceptance scenarios
 
@@ -240,4 +241,4 @@ Defaults: Europe/London, Monday-start weeks, 24-hour display, grouped suggestion
 
 Deferred: native iPhone app, two-way external calendar synchronization, task lists, recurring-event series, image/voice/PDF extraction, live transport information, fare monitoring, travel purchases, automatic RSVPs, booking changes with merchants, and access for other real users.
 
-Current decisions, 7 September 2026: the prize remains reduced manual entry, WhatsApp forwarding, and design craft. Rory and Codex are building from Edge, with Gmail first and iPhone/WhatsApp work still pending. The planned v1 iPhone integration is a one-way feed; eventual WhatsApp and web confirmation use the same reviewed proposal operation.
+Current decisions, 7 September 2026: the prize remains reduced manual entry, WhatsApp forwarding, and design craft. Rory and Codex are building from Edge, with Gmail deployed, a no-extra-owned-number WhatsApp spike next, and iPhone feed/push work pending device verification. The planned v1 iPhone integration is a one-way feed; eventual WhatsApp and web confirmation use the same reviewed proposal operation.

@@ -8,6 +8,8 @@ Copy `deployment.env.example` to `ops/local/deployment.env` and set the SSH targ
 
 The SSH helper requires an existing trusted host key and uses non-interactive authentication. Check the expected host independently before adding it to your known-hosts file.
 
+The helper uses `IPQoS=none` to avoid connection stalls on some operator networks. If local HTTPS probes stall during TLS 1.3 negotiation while the hosted app remains reachable, run with `CALENDAR_PROBE_TLS12=true` to use verified TLS 1.2 for the deployment checks. This does not change the server's TLS configuration or disable certificate validation.
+
 ## Server layout
 
 | Purpose | Path |
@@ -40,3 +42,9 @@ Both deployment modes require the prepared server layout and TLS service. Neithe
 ## Private operator notes
 
 Original installation notes and the existing deployment defaults are preserved under ignored `ops/local/`. The live TLS config and one-off installation assets also remain local. These files can contain account identities and infrastructure details and must never be staged for publication. Follow [Google setup](google-setup.md) and [frontend integration](frontend.md) for the reusable configuration steps.
+
+## Latest integration check
+
+On 7 September 2026 the initial Gmail import was confirmed complete, a history checkpoint was present, and scheduled capture was active. Both calendar services were running without automatic restarts and storage capacity was healthy. Detailed counts and account-specific diagnostics are retained only in `ops/local/`.
+
+The WhatsApp receiver spike is deployed disabled. Its public webhook returns 404 until all receiver settings are present; private status/inbox endpoints require the service credential. Sixty-six backend tests passed, including thirteen webhook checks. A real Meta forward, long-term test-number usability and iPhone notification delivery remain unverified.

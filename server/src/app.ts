@@ -8,6 +8,7 @@ import { ModelInterpreter } from './interpreter.ts';
 import { CalendarWorker } from './worker.ts';
 import { AppError } from './errors.ts';
 import { safeEqual } from './crypto.ts';
+import { registerWhatsAppRoutes } from './whatsapp.ts';
 
 const Owner = z.string().min(1).max(240);
 const Revision = z.number().int().positive();
@@ -19,6 +20,7 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options', 'nosniff');
     if (request.method === 'GET' && request.url === '/health') return;
+    if (request.routeOptions.url === '/webhooks/whatsapp' && ['GET', 'POST'].includes(request.method)) return;
     const token = request.headers.authorization;
     if (!token?.startsWith('Bearer ') || !safeEqual(token.slice(7), config.CALENDAR_SERVICE_TOKEN)) throw new AppError('unauthorized', 'Calendar access is required.', 401);
   });
@@ -26,9 +28,12 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
     if (error instanceof AppError) return reply.status(error.status).send({ error: { code: error.code, message: error.message } });
     if (error instanceof ZodError) return reply.status(400).send({ error: { code: 'invalid_input', message: `Check these fields: ${[...new Set(error.issues.map(issue => issue.path.join('.') || 'event'))].join(', ')}.` } });
     if ((error as { statusCode?: number }).statusCode === 400) return reply.status(400).send({ error: { code: 'invalid_input', message: 'The request must contain valid JSON.' } });
+    if ((error as { statusCode?: number }).statusCode === 413) return reply.status(413).send({ error: { code: 'input_too_large', message: 'The request body is too large.' } });
+    if ((error as { statusCode?: number }).statusCode === 415) return reply.status(415).send({ error: { code: 'unsupported_content_type', message: 'Send a JSON request body.' } });
     return reply.status(500).send({ error: { code: 'service_error', message: 'The calendar could not complete that action. Please try again.' } });
   });
   app.get('/health', async () => ({ ok: true }));
+  registerWhatsAppRoutes(app, config, store);
   app.get('/v1/state', async () => {
     const connection = store.get<GmailConnection>('connection');
     const counts = store.counts();

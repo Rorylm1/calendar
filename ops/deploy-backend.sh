@@ -132,17 +132,23 @@ stat -c "%d:%i" /var/lib/my-calendar/calendar.sqlite')"
   printf '%s\n' 'Live environment bytes and persistent database file identity were preserved.'
 fi
 python3 - "$CALENDAR_BACKEND_ORIGIN" <<'PY'
-import json,time,urllib.request,urllib.error,sys
+import json,time,urllib.request,urllib.error,sys,ssl,os
 base=sys.argv[1].rstrip('/')
+context=ssl.create_default_context()
+# Optional operator workaround for networks that stall TLS 1.3 negotiation.
+# This applies only to these probes; certificate and hostname checks stay on.
+if os.environ.get('CALENDAR_PROBE_TLS12')=='true':
+    context.minimum_version=ssl.TLSVersion.TLSv1_2
+    context.maximum_version=ssl.TLSVersion.TLSv1_2
 for attempt in range(30):
     try:
-        with urllib.request.urlopen(base+'/health',timeout=5) as response:
+        with urllib.request.urlopen(base+'/health',timeout=5,context=context) as response:
             if response.status==200 and json.load(response)=={'ok':True}:break
     except (urllib.error.URLError,TimeoutError):pass
     time.sleep(0.3)
 else:raise SystemExit('Backend did not become healthy after restart.')
 try:
-    with urllib.request.urlopen(base+'/v1/state',timeout=10) as response:
+    with urllib.request.urlopen(base+'/v1/state',timeout=10,context=context) as response:
         raise SystemExit('Unauthenticated state request was not rejected.')
 except urllib.error.HTTPError as error:
     if error.code!=401:raise SystemExit('Unexpected unauthenticated state response.')

@@ -13,6 +13,7 @@ exec ssh \
   -i "$calendar_ssh_identity" \
   -o IdentitiesOnly=yes \
   -o BatchMode=yes \
+  -o IPQoS=none \
   -o ConnectTimeout=8 \
   -o StrictHostKeyChecking=yes \
   "$calendar_ssh_target" "$@"

@@ -1,14 +1,14 @@
 # Personal calendar — milestones
 
-Updated: 7 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 53 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, and the initial import is running with paced reads after a quota-related interruption. Real suggestions are available in Review.
+Updated: 7 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 66 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The next work is the no-extra-owned-number WhatsApp spike and iPhone notification assessment. Real suggestions are available in Review.
 
 ## Objective
 
 Build a beautiful personal calendar that turns forwarded WhatsApp messages and Gmail into reviewed commitments and dated bookings, with confirmed events available in the iPhone Calendar app. Reduce manual entry, keep uncertain attendance explicit, and produce something Rory enjoys using and sharing.
 
-## Current sequence — Gmail first
+## Current sequence — WhatsApp spike, then iPhone delivery
 
-Rory asked to proceed with Gmail after choosing Edge. Complete the necessary calendar/storage foundation alongside Gmail connection, hourly capture, and review. WhatsApp onboarding and the iPhone subscription remain pending; the Gmail milestone must not be called fully complete until its real-email checks and eventual feed integration pass.
+The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has now requested the next WhatsApp spike and asked about iOS push. Test the official supplied receiver without buying or managing another number; assess Home Screen web push and keep actual iPhone subscription/reminder verification explicit. The whole Gmail daily-use milestone remains incomplete until its real-email acceptance and feed integration pass.
 
 - [x] Build and review visual alternatives; select Edge as the working direction.
 - [x] Implement the Edge personal app, encrypted persistent calendar/review data, and owner-restricted API bridge; preserve the original ten design studies.
@@ -19,10 +19,12 @@ Rory asked to proceed with Gmail after choosing Edge. Complete the necessary cal
 - [x] Complete account-holder consent and verify the connected Gmail profile.
 - [x] Capture and interpret real emails, produce dated suggestions for review, and recover the saved import from Gmail rate limiting with paced reads.
 - [x] Add and test automatic saved-import continuation, queued manual checks, and cancellation of provider waits on disconnect.
-- [ ] Finish the initial import and verify real hourly capture through user confirmation.
-- [ ] Resume iPhone feed and WhatsApp work after the Gmail flow is useful.
+- [x] Finish the initial import; verify the saved history checkpoint, no active import scan, and successful scheduled capture with the next check one hour later.
+- [ ] Complete real-mail accuracy acceptance; failed interpretations are retained for retry.
+- [x] Resume WhatsApp feasibility and iPhone notification research after Gmail became useful.
+- [ ] Receive an actual forward using the supplied Meta test number and establish whether it avoids ongoing number administration.
 
-These checks distinguish implementation from acceptance: real-mail accuracy, completed hourly import and iPhone behaviour remain unverified. Remote deployment checks are documented in [ops/README.md](ops/README.md); the model pair confirms API compatibility only. No whole Gmail or iPhone milestone is complete.
+These checks distinguish implementation from acceptance: real-mail accuracy and iPhone behaviour remain unverified; completed import and hourly scheduling have now been observed. Remote deployment checks are documented in [ops/README.md](ops/README.md); the model pair confirms API compatibility only. No whole Gmail or iPhone milestone is complete.
 
 ## Ownership and working agreement
 
@@ -47,22 +49,24 @@ Rory directs the design with Codex implementing it. Edge is the current visual r
 | 6. Prove everyday reliability | Private version that survives failures and is useful in daily use | Milestones 3–5 |
 | 7. Publish the showcase | Polished public demo with fictional data | Stable interface and isolation verified; personal-use feedback informs polish |
 
-The milestone numbers identify work areas, not the current execution order. Work is proceeding through the calendar foundation and Gmail first. The WhatsApp proof remains timeboxed to one evening when resumed. Milestones are defined by working outcomes rather than speculative dates; Rory's design review can proceed alongside backend and account setup.
+The milestone numbers identify work areas, not the current execution order. The calendar foundation and Gmail are deployed; current work resumes the WhatsApp proof. The WhatsApp proof remains timeboxed to one evening when resumed. Milestones are defined by working outcomes rather than speculative dates; Rory's design review can proceed alongside backend and account setup.
 
 ## Milestone 1 — Prove the official WhatsApp receiver
 
 **Owner:** Codex; Rory supplies account access and completes account-holder setup where necessary.
 
-**Purpose:** Resolve the highest integration uncertainty before building around it.
+**Purpose:** Determine whether forwarding can be useful without another number to buy or manage. Meta supplies the candidate test receiver; its suitability for ongoing personal use is unproven. Do not buy a SIM, migrate the personal account or substitute Baileys. See [the spike findings](docs/whatsapp-spike.md).
 
-- [ ] Set up an official Meta test receiver and a minimal webhook.
+- [x] Build and deploy the minimal signed webhook in its disabled state with a separate encrypted spike inbox; 13 new tests cover authentication, allowlists, replay, persistence and limits.
+- [ ] Obtain the Meta-provided test receiver and complete a real delivery check.
 - [ ] Forward an actual text message from Rory's normal WhatsApp account and inspect the content and context delivered.
-- [ ] Verify webhook authentication and sender restriction in the proof of concept.
-- [ ] Establish what is required for a dedicated production number, including eligibility, verification, and effective costs. Distinguish test delivery from production readiness.
+- [x] Verify webhook authentication and sender/receiver restrictions with synthetic payloads.
+- [ ] Verify the actual Meta signature and sender restriction with a real forward.
+- [ ] Establish test-receiver availability, real inbound delivery and unattended operation under the no-extra-owned-number constraint. Document production-number and eligibility requirements as limits, not as an approved purchase or migration.
 - [ ] Record missing context, particularly original sender/date and surrounding conversation.
 - [ ] Stop after the timebox and record either a workable route or the specific unresolved setup issue. Continue independent calendar/Gmail work if onboarding remains blocked.
 
-**Done when:** A real forward reaches the official webhook, and the production setup path and remaining requirements are recorded. If this cannot be demonstrated, leave the milestone incomplete with a clear finding; do not substitute Baileys or a personal-account scraping connection.
+**Done when:** A real forward reaches the official webhook and the ongoing-use path fits the no-extra-owned-number constraint, or a clear incompatibility is recorded for a product decision. If this cannot be demonstrated, leave the milestone incomplete with a clear finding; do not substitute Baileys or a personal-account scraping connection.
 
 **Design handoff:** Rory and Codex refine the actual capture states: received, processing, needs clarification, ready to review, and failed.
 
@@ -100,13 +104,15 @@ The milestone numbers identify work areas, not the current execution order. Work
 
 **Owner:** Codex; Rory verifies the subscription on the actual iPhone. Rory and Codex refine the subscription/settings presentation.
 
-**Status:** Pending. Neither the ICS feed nor actual iPhone reminder behaviour is established by the current local tests.
+**Status:** Platform feasibility researched; implementation and actual iPhone checks remain pending. Installed Home Screen web apps support push on iOS 16.4+ after explicit permission. Neither push delivery nor ICS reminder behaviour has been verified on the device. See [iPhone notification findings](docs/iphone-notifications.md).
 
 - [x] Establish an isolated HTTPS calendar service on Hetzner and verify access/capacity. The feed endpoint itself remains pending.
 - [ ] Publish confirmed events through a read-only ICS feed with stable event identifiers, revision tracking, and correct date/time representation.
 - [ ] Protect the subscription with an unguessable, revocable token. Explain that possession of the URL grants access to the exported event details; keep source messages and credentials out of the feed.
 - [ ] Include per-event alarms, with the planned 15-minute default for timed events and no invented time-based alarms for date-only bookings.
 - [ ] Add the subscription instructions and reminder settings to the designed interface.
+- [ ] Decide review alerts, event reminders, or both; implement an installable app and opt-in push only for the chosen scope, with discreet text and no duplicate event alarms.
+- [ ] Verify installation, permission, locked-phone delivery, tap-through, denial and revocation on the actual iPhone.
 - [ ] Verify a restaurant reservation, overnight flight, hotel stay, and date-only booking on the actual iPhone.
 - [ ] Measure how additions, edits, and cancellations refresh on the device, and verify whether subscribed-calendar alarms behave as intended under Rory's settings.
 
@@ -118,7 +124,7 @@ The milestone numbers identify work areas, not the current execution order. Work
 
 **Owner:** Codex; Rory and Codex refine any additional review/connection states needed.
 
-**Status:** The implementation is deployed and Google configuration is complete. The owner completed consent, and the expected mailbox is connected. The saved import recovered and continued automatically. Full import, hourly follow-up, and user acceptance remain open; live mailbox counts stay in the private app.
+**Status:** The implementation is deployed and Google configuration is complete. The owner completed consent, and the expected mailbox is connected. The saved import is complete and hourly capture has been observed. Real-mail accuracy and iPhone acceptance remain open; live mailbox counts stay in the private app.
 
 - [x] Implement read-only offline OAuth with owner-bound expiring state, PKCE, allowed-mailbox profile enforcement, encrypted tokens, and disconnect protection; cover these safeguards with synthetic tests.
 - [x] Complete Google configuration, read-only scope, exact redirects, and Production publishing status for personal use.
