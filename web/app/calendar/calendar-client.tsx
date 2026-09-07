@@ -1,5 +1,8 @@
 'use client';
 import { signOut } from 'next-auth/react';
+import { api } from '@/lib/client-api';
+import { stopDeviceNotifications } from '@/lib/push-client';
+import DeliverySettings from './delivery-settings';
 
 import {
   useCallback,
@@ -105,34 +108,6 @@ const blank = (date: string): EventFields => ({
   detail: '',
 });
 
-async function api<T>(
-  path: string,
-  method = 'GET',
-  body?: unknown,
-): Promise<T> {
-  const response = await fetch(`/api/calendar/${path}`, {
-    method,
-    credentials: 'same-origin',
-    cache: 'no-store',
-    ...(method === 'GET'
-      ? {}
-      : {
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body || {}),
-        }),
-  });
-  const result = (await response.json()) as T & {
-    error?: { message?: string; code?: string };
-  };
-  if (!response.ok) {
-    const error = new Error(
-      result.error?.message || 'Please try again.',
-    ) as Error & { code?: string };
-    error.code = result.error?.code;
-    throw error;
-  }
-  return result;
-}
 
 function EventForm({
   initial,
@@ -292,6 +267,12 @@ function EventForm({
           />
         </label>
       </details>
+      {fields.time && <label className="field-label" htmlFor={`${formId}-reminder`}>Calendar reminder
+        <select id={`${formId}-reminder`} value={fields.reminderMinutes === null ? 'off' : String(fields.reminderMinutes ?? 15)} onChange={event => setFields(previous => ({ ...previous, reminderMinutes: event.target.value === 'off' ? null : Number(event.target.value) }))}>
+          <option value="off">None</option><option value="0">At the time</option><option value="5">5 minutes before</option><option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option>
+          {fields.reminderMinutes != null && ![0,5,15,30,60,1440].includes(fields.reminderMinutes) && <option value={fields.reminderMinutes}>{fields.reminderMinutes} minutes before</option>}
+        </select><small>Included in your private Calendar subscription. Enable its alerts on your device.</small>
+      </label>}
       <p className="form-help">
         Leave unknown times blank. Nothing is sent to the organiser.
       </p>
@@ -344,6 +325,7 @@ export default function CalendarClient() {
   const reopenRef = useRef<HTMLButtonElement>(null);
   const requestNumber = useRef(0);
   const inFlight = useRef(false);
+  const signingOut = useRef(false);
   const clearPrivate = useCallback(() => {
     setData(null);
     setActive(null);
@@ -354,6 +336,7 @@ export default function CalendarClient() {
     setDisconnectWarning('');
   }, []);
   const refresh = useCallback(async () => {
+    if (signingOut.current) return;
     const number = ++requestNumber.current;
     try {
       const result = await api<CalendarState>('state');
@@ -378,7 +361,9 @@ export default function CalendarClient() {
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       void refresh();
-      const result = new URLSearchParams(window.location.search).get('gmail');
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('review') === '1') { setModal('review'); window.history.replaceState(null, '', '/calendar'); }
+      const result = params.get('gmail');
       if (result) {
         setModal('connections');
         setNotice(
@@ -493,6 +478,7 @@ export default function CalendarClient() {
         'kind',
         'location',
         'detail',
+        'reminderMinutes',
         ...optional,
       ];
       const creating = modal === 'add';
@@ -629,7 +615,7 @@ export default function CalendarClient() {
                   <Mail size={17} />
                   <span>Gmail</span>
                 </Button>
-                <Button variant="ghost" className="quiet-action personal-sign-out" aria-label="Sign out" onClick={() => { requestNumber.current++; clearPrivate(); void signOut({ redirectTo: '/sign-in' }); }}>
+                <Button variant="ghost" className="quiet-action personal-sign-out" aria-label="Sign out" disabled={busy} onClick={() => { signingOut.current = true; requestNumber.current++; clearPrivate(); setBusy(true); void Promise.race([stopDeviceNotifications().catch(() => undefined), new Promise(resolve => setTimeout(resolve, 3000))]).finally(() => { void signOut({ redirectTo: '/sign-in' }); }); }}>
                   <LogOut size={16} />
                   <span>Sign out</span>
                 </Button>
@@ -1101,6 +1087,7 @@ export default function CalendarClient() {
                 Gmail access cannot send, delete, or edit your email. Confirming
                 a plan does not send an RSVP.
               </p>
+              <DeliverySettings events={events} onEdit={event => { setActive(event); setModal('edit'); }} />
             </div>
           )}
           {modal === 'review' && (

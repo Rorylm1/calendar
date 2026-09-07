@@ -1,10 +1,10 @@
 # iPhone notifications
 
-Researched against current Apple and WebKit guidance on 7 September 2026. Research and proposed scope only; no push subscription, calendar feed, native app or notification delivery has been implemented or verified by this document.
+Researched against current Apple and WebKit guidance on 7 September 2026. The calendar feed, installable app and opt-in review-alert infrastructure are now implemented; see [calendar delivery](calendar-delivery.md). No physical iPhone notification delivery, subscription refresh or alarm behaviour has yet been verified.
 
 ## Objective
 
-Let the owner notice new items requiring review and receive useful reminders for confirmed plans, while preserving the quiet Edge experience. The choice between review alerts, event reminders, or both is still awaiting the owner's answer.
+Let the owner notice new items requiring review and receive useful reminders for confirmed plans, while preserving the quiet Edge experience. While the owner is away, the implemented default is opt-in grouped review alerts plus confirmed-event alarms through the private subscription. Neither is enabled without the owner's action; the preference can still be adjusted.
 
 ## Confirmed platform facts
 
@@ -38,7 +38,7 @@ Calendar-wide notification settings also control presentation. Mac Calendar sepa
 
 - Record iOS version; install from the final HTTPS origin; verify Google sign-in works inside the installed app.
 - Enable notifications through a tap; test denied permission, later settings changes and removal/reinstallation.
-- Deliver a fictional grouped review alert with the app closed and phone locked; verify tap-to-Review, badge updates and no exposure before authentication.
+- Deliver a fictional grouped review alert with the app closed and phone locked; verify tap-to-Review and no exposure before authentication.
 - Check Focus, sound settings, offline/reconnect, expired messages, duplicates and disable/sign-out behavior. Record observed delays; do not infer a guarantee from a few successes.
 - Subscribe to a fictional confirmed-events feed. Verify restaurant, date-only hotel and cross-zone overnight flight representations, alert timing, and update/cancellation refresh with Calendar closed.
 - Test late amendments and removal of an already scheduled alert. Choose one default reminder channel only after these checks and the owner's notification preference are settled.

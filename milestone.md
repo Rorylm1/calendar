@@ -1,14 +1,14 @@
 # Personal calendar — milestones
 
-Updated: 7 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 66 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The next work is the no-extra-owned-number WhatsApp spike and iPhone notification assessment. Real suggestions are available in Review.
+Updated: 7 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 105 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in review alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Real suggestions are available in Review.
 
 ## Objective
 
 Build a beautiful personal calendar that turns forwarded WhatsApp messages and Gmail into reviewed commitments and dated bookings, with confirmed events available in the iPhone Calendar app. Reduce manual entry, keep uncertain attendance explicit, and produce something Rory enjoys using and sharing.
 
-## Current sequence — WhatsApp spike, then iPhone delivery
+## Current sequence — iPhone delivery and reliability while Rory is away
 
-The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has now requested the next WhatsApp spike and asked about iOS push. Test the official supplied receiver without buying or managing another number; assess Home Screen web push and keep actual iPhone subscription/reminder verification explicit. The whole Gmail daily-use milestone remains incomplete until its real-email acceptance and feed integration pass.
+The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has authorized continued milestone work while away. The official WhatsApp receiver is deployed disabled; its real test awaits Meta account access and must fit the no-extra-owned-number constraint. The private ICS feed, installable app and opt-in review alerts are implemented. Device delivery and real-mail quality acceptance remain open. Continue reliability and fictional evaluation work without confirming personal suggestions or changing real bookings.
 
 - [x] Build and review visual alternatives; select Edge as the working direction.
 - [x] Implement the Edge personal app, encrypted persistent calendar/review data, and owner-restricted API bridge; preserve the original ten design studies.
@@ -49,7 +49,7 @@ Rory directs the design with Codex implementing it. Edge is the current visual r
 | 6. Prove everyday reliability | Private version that survives failures and is useful in daily use | Milestones 3–5 |
 | 7. Publish the showcase | Polished public demo with fictional data | Stable interface and isolation verified; personal-use feedback informs polish |
 
-The milestone numbers identify work areas, not the current execution order. The calendar foundation and Gmail are deployed; current work resumes the WhatsApp proof. The WhatsApp proof remains timeboxed to one evening when resumed. Milestones are defined by working outcomes rather than speculative dates; Rory's design review can proceed alongside backend and account setup.
+The milestone numbers identify work areas, not the current execution order. The calendar foundation and Gmail are deployed; current work advances calendar delivery and reliability while WhatsApp account access is pending. The WhatsApp proof remains timeboxed to one evening when resumed. Milestones are defined by working outcomes rather than speculative dates; Rory's design review can proceed alongside backend and account setup.
 
 ## Milestone 1 — Prove the official WhatsApp receiver
 
@@ -104,14 +104,14 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 **Owner:** Codex; Rory verifies the subscription on the actual iPhone. Rory and Codex refine the subscription/settings presentation.
 
-**Status:** Platform feasibility researched; implementation and actual iPhone checks remain pending. Installed Home Screen web apps support push on iOS 16.4+ after explicit permission. Neither push delivery nor ICS reminder behaviour has been verified on the device. See [iPhone notification findings](docs/iphone-notifications.md).
+**Status:** Private ICS subscriptions, per-event reminder settings, Home Screen manifest/icons and opt-in grouped review alerts are implemented. Synthetic tests and the browser subscription-control flow pass. Both features remain off until the owner enables them. Physical iPhone push delivery and Calendar refresh/alarms are unverified. See [delivery implementation](docs/calendar-delivery.md) and [iPhone findings](docs/iphone-notifications.md).
 
-- [x] Establish an isolated HTTPS calendar service on Hetzner and verify access/capacity. The feed endpoint itself remains pending.
-- [ ] Publish confirmed events through a read-only ICS feed with stable event identifiers, revision tracking, and correct date/time representation.
-- [ ] Protect the subscription with an unguessable, revocable token. Explain that possession of the URL grants access to the exported event details; keep source messages and credentials out of the feed.
-- [ ] Include per-event alarms, with the planned 15-minute default for timed events and no invented time-based alarms for date-only bookings.
-- [ ] Add the subscription instructions and reminder settings to the designed interface.
-- [ ] Decide review alerts, event reminders, or both; implement an installable app and opt-in push only for the chosen scope, with discreet text and no duplicate event alarms.
+- [x] Establish an isolated HTTPS calendar service on Hetzner and verify access/capacity. The token-protected feed endpoint is now implemented.
+- [x] Publish confirmed events through a read-only ICS feed with stable event identifiers, revision tracking, and correct date/time representation.
+- [x] Protect the subscription with an unguessable, revocable token. Explain that possession of the URL grants access to the exported event details; keep source messages and credentials out of the feed.
+- [x] Include per-event alarms, with the planned 15-minute default for timed events and no invented time-based alarms for date-only bookings.
+- [x] Add the subscription instructions and reminder settings to the designed interface.
+- [x] Implement the away-work default: an installable app with optional grouped review alerts and event alarms through the private feed. Permission remains an explicit device action; no duplicate event-reminder pushes. Rory can refine this preference after trying it.
 - [ ] Verify installation, permission, locked-phone delivery, tap-through, denial and revocation on the actual iPhone.
 - [ ] Verify a restaurant reservation, overnight flight, hotel stay, and date-only booking on the actual iPhone.
 - [ ] Measure how additions, edits, and cancellations refresh on the device, and verify whether subscribed-calendar alarms behave as intended under Rory's settings.
@@ -166,16 +166,17 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 **Owner:** Codex for engineering; Rory for daily use and feedback; Rory and Codex for design refinements.
 
-- [x] Pass 53 synthetic backend tests, including interrupted Gmail pagination, expired checkpoints, OAuth/disconnect safeguards, model failures, queue fairness/retries, chronology, retention, and budget controls.
+- [x] Pass the synthetic backend suite, including interrupted Gmail pagination, expired checkpoints, OAuth/disconnect safeguards, model failures, queue fairness/retries, chronology, retention, and budget controls.
 - [x] Verify local API owner/origin checks and manual create/edit/optional-field clearing/stale-409/delete behaviour.
 - [ ] Exercise the deployed service's restart/recovery paths with real integration configuration; test WhatsApp replay once its receiver exists.
 - [ ] Verify accepted input is retained, failed work can retry, and connection or processing problems are visible.
-- [ ] Check that stale proposals cannot overwrite manual edits and cancelled/changed events produce the correct feed revisions and alarms.
-- [ ] Verify secret handling, owner access, source retention, redacted logs, feed-token revocation, and backup/restore.
+- [x] Verify synthetically that stale proposals cannot overwrite manual edits and that approved changes/cancellations produce correct feed revisions and alarms; device refresh remains under milestone 3.
+- [x] Verify encrypted storage, owner/origin access, synthetic retention and redacted errors, feed-token revocation, online backup and isolated integrity/decryption restore checks. One real snapshot was copied off-host and verified without changing the live database.
+- [ ] Preserve and verify an independent recovery copy of the encryption key and rehearse complete application/provider recovery; isolated database verification alone does not establish this.
 - [ ] Use the app privately for an initial week and record missed relevant items, irrelevant suggestions, correction effort, and measured running cost.
 - [ ] Grow the labelled evaluation set toward 50 varied examples from synthetic or appropriately sanitized messages. Track precision/recall against the plan's 90% target, including triage misses; treat this as a quality measurement rather than an arbitrary barrier to private use.
 - [ ] Fix failures that cause lost messages, duplicate events, invented details, unapproved writes, or misleading reminder behaviour before calling the private version dependable.
-- [ ] Keep grouped-suggestion web push optional. Decide on it from actual review habits; test any reminder fallback separately if the iPhone subscription proves insufficient.
+- [x] Keep grouped review push opt-in, baseline existing suggestions, use overnight quiet hours and expose an off switch. Actual review habits and device delivery remain to be evaluated; no event-reminder fallback has been added.
 
 **Done when:** The complete capture/review/calendar flow has worked during ordinary use, recovery and restore have been demonstrated, and remaining limitations are documented. Rory can tell when data is stale or action is required.
 

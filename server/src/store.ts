@@ -8,6 +8,7 @@ import { confirmedFields, mergeFields, type CalendarEvent, type Fields, type Pro
 import type { z } from 'zod';
 
 export type SourceStatus = 'fetched' | 'processing' | 'processed' | 'filtered' | 'failed';
+export type EventExportMetadata = { revision: number; createdAt: string; modifiedAt: string };
 export class Store {
   readonly db: DatabaseSync;
   readonly vault: Vault;
@@ -34,12 +35,23 @@ export class Store {
   all<T>(bucket: string): T[] { return (this.db.prepare('SELECT id,payload FROM records WHERE bucket=?').all(bucket) as { id: string; payload: string }[]).map(row => this.vault.open<T>(row.payload, `${bucket}:${row.id}`)); }
   events() { return this.all<CalendarEvent>('events').sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`)); }
   proposals() { return this.all<Proposal>('proposals'); }
+  eventExportMetadata(event: CalendarEvent, now = Date.now()): EventExportMetadata {
+    const old = this.get<EventExportMetadata>('event_export_metadata', event.id);
+    if (old?.revision === event.revision) return old;
+    // Existing calendars receive a stable first-export timestamp once. New
+    // mutations write this metadata in the same transaction as the event.
+    const modifiedAt = new Date(Math.max(now, old ? Date.parse(old.modifiedAt) : 0)).toISOString();
+    const metadata = { revision: event.revision, createdAt: old?.createdAt || modifiedAt, modifiedAt };
+    this.put('event_export_metadata', event.id, metadata); return metadata;
+  }
+  private saveEvent(event: CalendarEvent) { this.put('events', event.id, event); this.eventExportMetadata(event); }
   createEvent(fields: Fields, source: CalendarEvent['source'] = 'Manual'): CalendarEvent {
-    const event: CalendarEvent = { ...confirmedFields(fields), id: randomUUID(), source, revision: 1 }; this.put('events', event.id, event); return event;
+    const write = () => { const event: CalendarEvent = { ...confirmedFields(fields), id: randomUUID(), source, revision: 1 }; this.saveEvent(event); return event; };
+    return this.db.isTransaction ? write() : this.transaction(write);
   }
   patchEvent(id: string, patch: z.infer<typeof EventPatch>, revision: number): CalendarEvent {
     return this.transaction(() => { const old = this.requireEvent(id, revision); const { id: _, source, revision: __, ...fields } = old;
-      const event: CalendarEvent = { ...confirmedFields(mergeFields(fields, patch)), id, source, revision: old.revision + 1 }; this.put('events', id, event); return event; });
+      const event: CalendarEvent = { ...confirmedFields(mergeFields(fields, patch)), id, source, revision: old.revision + 1 }; this.saveEvent(event); return event; });
   }
   deleteEvent(id: string, revision: number) {
     this.transaction(() => { this.requireEvent(id, revision); this.remove('events', id); this.put('deleted_events', id, { revision: revision + 1, deletedAt: new Date().toISOString() }); });
@@ -71,7 +83,7 @@ export class Store {
         const old = this.requireEvent(proposal.targetEventId, proposal.targetRevision);
         if (expectedRevision !== undefined && expectedRevision !== old.revision) throw new AppError('revision_conflict', 'This event has changed. Refresh and review it again.', 409);
         if (proposal.action === 'cancel') { this.remove('events', old.id); this.put('deleted_events', old.id, { revision: old.revision + 1, deletedAt: new Date().toISOString() }); }
-        else { event = { ...confirmedFields(mergeFields(proposal.event, patch)), id: old.id, source: old.source, revision: old.revision + 1 }; this.put('events', old.id, event); }
+        else { event = { ...confirmedFields(mergeFields({ ...proposal.event, reminderMinutes: old.reminderMinutes }, patch)), id: old.id, source: old.source, revision: old.revision + 1 }; this.saveEvent(event); }
       }
       proposal.status = 'confirmed'; proposal.revision += 1;
       if (proposal.action !== 'cancel') proposal.attendance = 'confirmed';

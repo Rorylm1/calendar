@@ -43,7 +43,7 @@ systemctl show caddy.service ${CALENDAR_PROTECTED_SERVICE} -p MainPID --value")"
 mkdir -p "${calendar_ops_dir}/releases"
 
 python3 - "${calendar_project_dir}/server" "$calendar_manifest" "$calendar_release_id" "$calendar_preserve_env" "$CALENDAR_SSH_TARGET" <<'PY'
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import hashlib,json,re,sys
 source,manifest,release=Path(sys.argv[1]),Path(sys.argv[2]),sys.argv[3]
 preserve_env=sys.argv[4]=='true'
@@ -54,8 +54,8 @@ if not preserve_env:
         if match:env[match.group(1)]=match.group(2).strip().strip('"\'')
     if env.get('HOST')!='127.0.0.1' or env.get('PORT')!='8100':
         raise SystemExit('Production HOST/PORT must be the calendar loopback listener.')
-    database=Path(env.get('CALENDAR_DB_PATH',''))
-    if not database.is_absolute() or not database.resolve().is_relative_to('/var/lib/my-calendar'):
+    database=PurePosixPath(env.get('CALENDAR_DB_PATH',''))
+    if not database.is_absolute() or '..' in database.parts or not database.is_relative_to('/var/lib/my-calendar'):
         raise SystemExit('Production database must be beneath /var/lib/my-calendar.')
 files=[source/'package.json',source/'package-lock.json']
 for path in (source/'src').rglob('*'):

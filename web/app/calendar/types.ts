@@ -17,6 +17,7 @@ export type EventFields = {
   location: string;
   detail: string;
   reference?: string;
+  reminderMinutes?: number | null;
 };
 export type CalendarEvent = EventFields & {
   id: string;

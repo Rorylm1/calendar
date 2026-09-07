@@ -4,8 +4,9 @@ import { appOrigin, isOwner, type CalendarSettings, type OwnerSession } from './
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const fail = (code: string, message: string, status: number) => json({ error: { code, message } }, status);
 const routeAllowed = (method: string, path: string) =>
-  (method === 'GET' && ['state', 'gmail/callback'].includes(path)) ||
-  (method === 'POST' && (/^gmail\/(connect|sync|disconnect|retry-processing)$/.test(path) || path === 'events' || /^proposals\/[A-Za-z0-9_-]+\/(confirm|dismiss)$/.test(path))) ||
+  (method === 'GET' && ['state', 'gmail/callback', 'calendar/feed', 'notifications'].includes(path)) ||
+  (method === 'POST' && (/^gmail\/(connect|sync|disconnect|retry-processing)$/.test(path) || ['events', 'calendar/feed/enable', 'calendar/feed/rotate', 'notifications'].includes(path) || /^proposals\/[A-Za-z0-9_-]+\/(confirm|dismiss)$/.test(path))) ||
+  (method === 'DELETE' && ['calendar/feed', 'notifications'].includes(path)) ||
   (['PATCH', 'DELETE'].includes(method) && /^events\/[A-Za-z0-9_-]+$/.test(path));
 
 export function createCalendarHandler(deps: { session: () => Promise<OwnerSession>; settings: () => CalendarSettings; fetch?: typeof fetch }) {

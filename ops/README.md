@@ -47,4 +47,11 @@ Original installation notes and the existing deployment defaults are preserved u
 
 On 7 September 2026 the initial Gmail import was confirmed complete, a history checkpoint was present, and scheduled capture was active. Both calendar services were running without automatic restarts and storage capacity was healthy. Detailed counts and account-specific diagnostics are retained only in `ops/local/`.
 
-The WhatsApp receiver spike is deployed disabled. Its public webhook returns 404 until all receiver settings are present; private status/inbox endpoints require the service credential. Sixty-six backend tests passed, including thirteen webhook checks. A real Meta forward, long-term test-number usability and iPhone notification delivery remain unverified.
+The WhatsApp receiver spike is deployed disabled. Its public webhook returns 404 until all receiver settings are present; private status/inbox endpoints require the service credential. The backend suite now also covers the private ICS feed, opt-in review push and isolated backup recovery. A real Meta forward, long-term test-number usability and iPhone notification delivery remain unverified.
+
+
+## Calendar delivery and recovery
+
+The delivery release adds a private subscription origin and a stable VAPID key pair to the existing backend environment. Existing Gmail credentials, encryption key, database path and owner configuration are preserved. The feed remains disabled until Create private link is chosen; push has no subscribed devices until explicit opt-in. [Calendar delivery](../docs/calendar-delivery.md) documents the public bearer-link boundary and device limitations.
+
+[Backup recovery](../docs/backup-recovery.md) describes consistent online snapshots, private off-host copies and isolated integrity/decryption verification. Database verification has passed on a real snapshot; it does not establish complete provider recovery or an independent key backup.

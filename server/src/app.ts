@@ -8,6 +8,8 @@ import { ModelInterpreter } from './interpreter.ts';
 import { CalendarWorker } from './worker.ts';
 import { AppError } from './errors.ts';
 import { safeEqual } from './crypto.ts';
+import { registerPushRoutes } from './push.ts';
+import { registerFeedRoutes } from './calendar-feed.ts';
 import { registerWhatsAppRoutes } from './whatsapp.ts';
 
 const Owner = z.string().min(1).max(240);
@@ -21,6 +23,7 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
     reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options', 'nosniff');
     if (request.method === 'GET' && request.url === '/health') return;
     if (request.routeOptions.url === '/webhooks/whatsapp' && ['GET', 'POST'].includes(request.method)) return;
+    if (request.routeOptions.url === '/calendar/feed/:token.ics' && ['GET', 'HEAD'].includes(request.method)) return;
     const token = request.headers.authorization;
     if (!token?.startsWith('Bearer ') || !safeEqual(token.slice(7), config.CALENDAR_SERVICE_TOKEN)) throw new AppError('unauthorized', 'Calendar access is required.', 401);
   });
@@ -34,6 +37,8 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
   });
   app.get('/health', async () => ({ ok: true }));
   registerWhatsAppRoutes(app, config, store);
+  registerFeedRoutes(app, config, store);
+  const push = registerPushRoutes(app, config, store, { isBusy: () => worker.syncing || worker.processingStatus === 'processing' });
   app.get('/v1/state', async () => {
     const connection = store.get<GmailConnection>('connection');
     const counts = store.counts();
@@ -57,7 +62,7 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
   app.post('/v1/events', async (request, reply) => reply.status(201).send({ event: store.createEvent(EventFields.parse(request.body)) }));
   app.patch('/v1/events/:id', async request => { const { id } = z.object({ id: z.string().min(1) }).parse(request.params); const body = z.object({ event: EventPatch, expectedRevision: Revision }).strict().parse(request.body); return { event: store.patchEvent(id, body.event, body.expectedRevision) }; });
   app.delete('/v1/events/:id', async request => { const { id } = z.object({ id: z.string().min(1) }).parse(request.params); const body = z.object({ expectedRevision: Revision }).strict().parse(request.body); store.deleteEvent(id, body.expectedRevision); return { deleted: true }; });
-  app.addHook('onReady', async () => { if (overrides.schedule !== false) worker.start(); });
-  app.addHook('onClose', async () => { await worker.stop(); if (!overrides.store) store.close(); });
-  return { app, store, google, worker };
+  app.addHook('onReady', async () => { if (overrides.schedule !== false) { worker.start(); push.start(); } });
+  app.addHook('onClose', async () => { await push.stop(); await worker.stop(); if (!overrides.store) store.close(); });
+  return { app, store, google, worker, push };
 }

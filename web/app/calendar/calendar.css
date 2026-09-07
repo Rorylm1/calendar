@@ -462,3 +462,33 @@
   padding: 8px 0 0;
   font-size: 13px;
 }
+
+.delivery-settings { margin-top: 30px; }
+.delivery-section { border-top: 1px solid var(--line); padding-top: 26px; margin-top: 26px; }
+.delivery-section h3 { font-size: 17px; }
+.delivery-status { margin-left: auto; color: var(--soft); font-size: 11px; white-space: nowrap; }
+.delivery-actions { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+.delivery-link { display: inline-flex; gap: 12px; align-items: center; background: var(--ink); color: var(--canvas); padding: 12px 17px; font-size: 12px; border-radius: 7px; font-weight: 500; }
+.delivery-help { margin-top: 19px; font-size: 12px; color: var(--soft); line-height: 1.8; }
+.delivery-help summary { cursor: pointer; padding: 6px 0; color: var(--ink); }
+.delivery-help ol { padding-left: 20px; margin: 10px 0; }
+.delivery-help p { margin: 10px 0; }
+.delivery-help .field-label { margin-top: 14px; }
+.private-feed-address { width: 100%; min-width: 0; color: var(--soft); background: transparent; border: 1px solid var(--line); border-radius: 5px; padding: 10px; font-size: 11px; }
+.delivery-secondary { margin-top: 15px; }
+.delivery-secondary button,.delivery-text-button,.delivery-attention button { font-size: 12px; color: var(--soft); background: transparent; text-decoration: underline; text-underline-offset: 4px; padding: 6px 0; border: 0; }
+.delivery-attention { font-size: 12px; line-height: 1.8; color: #dfc5a2; margin: 15px 0; }
+.delivery-attention button { display: block; color: inherit; }
+.delivery-install { display: flex; gap: 12px; color: var(--soft); margin: 16px 0; }
+.delivery-install > svg { flex-shrink: 0; margin-top: 2px; }
+.delivery-install strong { color: var(--ink); font-size: 12px; font-weight: 500; }
+.delivery-install p { font-size: 12px; line-height: 1.8; margin-top: 5px; }
+.delivery-confirm { border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-top: 20px; }
+.delivery-confirm p { font-size: 13px; color: var(--soft); line-height: 1.8; margin-bottom: 14px; }
+.delivery-feedback { color: var(--ink); font-size: 12px; line-height: 1.8; padding-top: 16px; }
+.personal-form .field-label > small { font-size: 11px; line-height: 1.7; font-weight: 400; color: var(--soft); }
+@media (max-width: 520px) {
+  .delivery-section .connection-heading { display: grid; grid-template-columns: 48px 1fr; align-items: start; }
+  .delivery-status { grid-column: 2; margin: -3px 0 0; }
+  .personal-calendar { padding-bottom: env(safe-area-inset-bottom); }
+}

@@ -5,6 +5,8 @@ const envSchema = z.object({
   CALENDAR_DB_PATH: z.string().default('./data/calendar.sqlite'),
   CALENDAR_SERVICE_TOKEN: z.string().min(32),
   CALENDAR_ENCRYPTION_KEY: z.string().refine(value => /^[a-fA-F0-9]{64}$/.test(value) || (/^[A-Za-z0-9+/]+={0,2}$/.test(value) && Buffer.from(value, 'base64').length === 32), 'Must encode exactly 32 random bytes'),
+  CALENDAR_PUBLIC_ORIGIN: z.string().default(''),
+  VAPID_PUBLIC_KEY: z.string().default(''), VAPID_PRIVATE_KEY: z.string().default(''), VAPID_SUBJECT: z.string().default(''),
   GOOGLE_CLIENT_ID: z.string().default(''), GOOGLE_CLIENT_SECRET: z.string().default(''),
   GOOGLE_REDIRECT_URI: z.url().default('http://localhost:3000/api/calendar/gmail/callback'),
   GMAIL_ALLOWED_EMAIL: z.email(), OPENROUTER_API_KEY: z.string().default(''),
@@ -30,6 +32,10 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   const redirect = new URL(result.data.GOOGLE_REDIRECT_URI);
   if (redirect.protocol !== 'https:' && !(redirect.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(redirect.hostname))) throw new Error('OAuth redirect requires HTTPS outside localhost.');
+  if (result.data.CALENDAR_PUBLIC_ORIGIN) {
+    const value = new URL(result.data.CALENDAR_PUBLIC_ORIGIN);
+    if (value.origin !== result.data.CALENDAR_PUBLIC_ORIGIN || value.username || value.password || (value.protocol !== 'https:' && !(value.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(value.hostname)))) throw new Error('Calendar public origin must be an HTTPS origin without a path.');
+  }
   return result.data;
 }
 export const googleConfigured = (config: Config) => Boolean(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET);

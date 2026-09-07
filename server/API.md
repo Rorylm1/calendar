@@ -6,7 +6,7 @@ JSON errors are `{ "error": { "code": "revision_conflict", "message": "This even
 
 ## Data
 
-`Event`: `{ id, title, date, time?, endDate?, endTime?, timeZone?, endTimeZone?, kind, location, detail, reference?, source, revision }`. Dates use `YYYY-MM-DD`, times `HH:mm`, time zones IANA names. `kind` is `food | travel | stay | social | appointment | other`. `source` is `Gmail | Manual`. Missing time remains absent. A confirmed event requires a valid title and date. A hotel end date represents checkout; flight arrival may have a different zone/date. Revisions start at 1.
+`Event`: `{ id, title, date, time?, endDate?, endTime?, timeZone?, endTimeZone?, kind, location, detail, reference?, reminderMinutes?, source, revision }`. Dates use `YYYY-MM-DD`, times `HH:mm`, time zones IANA names. `kind` is `food | travel | stay | social | appointment | other`. `source` is `Gmail | Manual`. Missing time remains absent. A confirmed event requires a valid title and date. A hotel end date represents checkout; flight arrival may have a different zone/date. Revisions start at 1.
 
 `Proposal`: `{ id, action, targetEventId?, targetRevision?, event, attendance, reason, evidence, unresolvedFields, status, revision, sourceMessageIds, createdAt }`. `action` is `create | update | cancel`. `event` has the editable event fields above, but its date may be absent; it has no id/revision. `attendance` is `confirmed | invited | unknown | declined`. `evidence` is an array of short strings. `status` is `pending | confirmed | dismissed`. Pending proposals never appear in the confirmed events collection. Confirming an invited/unknown proposal is the owner's explicit choice to attend; it does not send an RSVP.
 
@@ -31,7 +31,7 @@ JSON errors are `{ "error": { "code": "revision_conflict", "message": "This even
 | PATCH `/v1/events/:id` | `{ event: Partial<EventFields>, expectedRevision: number }` | `{ event: Event }` |
 | DELETE `/v1/events/:id` | `{ expectedRevision: number }` | `{ deleted: true }` |
 
-`EventFields` = title/date/time/endDate/endTime/timeZone/endTimeZone/kind/location/detail/reference. On edits, `null` clears an optional field; omitted fields stay unchanged. Required fields cannot be cleared. Confirm may provide missing/corrected fields, but never authorizes a stale change: update/cancel must still match the proposal's original `targetRevision`. Optional `expectedRevision` is an additional assertion against that target event; it does not bypass stale protection. Create confirmation ignores no unresolved facts: date/title must be resolved, while a missing time is valid and remains missing.
+`EventFields` = title/date/time/endDate/endTime/timeZone/endTimeZone/kind/location/detail/reference/reminderMinutes. On edits, `null` clears an optional field; omitted fields stay unchanged. Required fields cannot be cleared. Confirm may provide missing/corrected fields, but never authorizes a stale change: update/cancel must still match the proposal's original `targetRevision`. Optional `expectedRevision` is an additional assertion against that target event; it does not bypass stale protection. Create confirmation ignores no unresolved facts: date/title must be resolved, while a missing time is valid and remains missing.
 
 The OAuth redirect URI is the frontend's `/api/calendar/gmail/callback` (local default `http://localhost:3000/api/calendar/gmail/callback`). The frontend must store returned state in a Secure/HttpOnly/SameSite=Lax cookie (Secure except localhost), compare it on return, and proxy code/state with the authenticated owner's stable id. The backend additionally consumes a 10-minute single-use state bound to that owner and its PKCE verifier. Gmail requests only `gmail.readonly`; `/profile` must match configured `GMAIL_ALLOWED_EMAIL`. No tokens are returned to the frontend. A successful connection queues an initial 30-day scan.
 
@@ -56,3 +56,23 @@ Text is captured up to 16 KiB. Forwarded/frequently-forwarded flags and reply ID
 Bounds: 128 KiB per HTTP body, 50 messages per notification, and 1,000 items in this spike inbox. A full inbox returns 503 without partially accepting a batch. Stored spike items remain pending for the later interpretation milestone. This spike sends no WhatsApp messages, marks nothing read, invokes no model, and creates no calendar proposals or events. It requires no phone-number purchase in code; Meta onboarding and test-number suitability remain separate checks.
 
 The protocol was checked against [Meta's official webhook samples](https://github.com/fbsamples/whatsapp-api-examples/tree/main/receive-webhook-js) and [signature example](https://github.com/fbsamples/whatsapp-api-examples/tree/main/signature-validation-with-webhooks-payloads). Main Meta documentation requests were rate-limited during implementation. Thirteen synthetic tests cover verification, byte-exact signatures, replays, sender/receiver isolation, encrypted persistence, restarts, unsupported inputs, capacity, durable-write failures, and the unchanged authentication of `/v1` routes. No real Meta webhook has been received in this implementation test.
+
+
+## Calendar feed and review alerts
+
+All settings routes retain the existing service credential and owner/origin-protected frontend proxy. No settings operation enables another integration.
+
+| Method / path | Request | Response |
+| --- | --- | --- |
+| GET `/v1/calendar/feed` | — | `{configured, enabled, url, webcalUrl, updatedAt, blockedEvents:[{id,reason}]}` |
+| POST `/v1/calendar/feed/enable` | `{}` | Feed settings; creates one encrypted private grant, idempotent while enabled |
+| POST `/v1/calendar/feed/rotate` | `{}` | Feed settings with a new URL; old URL immediately invalid |
+| DELETE `/v1/calendar/feed` | `{}` | Feed settings, revoked |
+| GET/HEAD `/calendar/feed/:token.ics` | Private token in path | Public bearer-link exception, `text/calendar`, no-store; uniform 404 for invalid/disabled/revoked tokens |
+| GET `/v1/notifications` | — | `{configured, publicKey, enabled, subscriptionCount, subscriptionIds, delivery, quietHours}` |
+| POST `/v1/notifications` | `{subscription: PushSubscriptionJSON}` | Notification settings; opt this device in, baseline existing suggestions |
+| DELETE `/v1/notifications` | `{endpoint?:string}` | Notification settings; omitted endpoint disables all devices |
+
+`subscriptionIds` contains SHA-256 hashes of endpoints so the browser can identify its own subscription without exposing endpoint URLs. `delivery` contains `{state,lastSentAt,lastErrorCode,nextAttemptAt}` with safe codes only. No send-test or arbitrary-message endpoint is exposed. Push configuration requires a complete, valid VAPID triplet. Subscription writes are bounded to 4 KiB and five devices.
+
+`reminderMinutes` is an integer from 0 to 10080, or null to disable. Omitted means 15 minutes for timed events; date-only events never receive time-based alarms. See [delivery semantics and acceptance limits](../docs/calendar-delivery.md).

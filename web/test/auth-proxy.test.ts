@@ -79,3 +79,15 @@ test('identity sign-in cannot override scopes or callbacks through URL parameter
   const callback = `https://calendar.example.test/api/auth/callback/google?code=synthetic&state=${state}`;
   assert.equal(fixedIdentitySignInUrl(callback), callback);
 });
+test('private feed settings and push controls retain owner and origin checks', async () => {
+  for (const [path, method] of [['calendar/feed', 'GET'], ['calendar/feed/enable', 'POST'], ['calendar/feed/rotate', 'POST'], ['calendar/feed', 'DELETE'], ['notifications', 'GET'], ['notifications', 'POST'], ['notifications', 'DELETE']]) {
+    const anonymous = fixture(null); assert.equal((await anonymous.request(path, method)).status, 401); assert.equal(anonymous.calls.length, 0);
+    if (method !== 'GET') { const crossSite = fixture(); assert.equal((await crossSite.request(path, method, { origin: 'https://evil.example' }, '{}')).status, 403); assert.equal(crossSite.calls.length, 0); }
+    const allowed = fixture(); const response = await allowed.request(path, method, { origin: settings.CALENDAR_APP_ORIGIN! }, method === 'GET' ? undefined : '{}');
+    assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store'); assert.equal(allowed.calls[0]!.url, `https://backend.example.test/v1/${path}`);
+  }
+  const { request, calls } = fixture();
+  assert.equal((await request('calendar/feed/synthetic-private-link.ics')).status, 404);
+  assert.equal((await request('notifications/send', 'POST', { origin: settings.CALENDAR_APP_ORIGIN! }, '{}')).status, 404);
+  assert.equal(calls.length, 0);
+});
