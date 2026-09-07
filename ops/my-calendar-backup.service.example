@@ -1,0 +1,40 @@
+# Managed by the My Calendar backup installer.
+[Unit]
+Description=Private online SQLite backup for My Calendar
+After=my-calendar.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 -I /opt/my-calendar/ops/backup-calendar.py --source /var/lib/my-calendar/calendar.sqlite --destination /var/backups/my-calendar --keep-days 14 --keep-minimum 3 --timeout 120
+TimeoutStartSec=180
+TimeoutStopSec=15
+KillSignal=SIGINT
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+CPUQuota=25%
+MemoryMax=192M
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/my-calendar
+ReadWritePaths=/var/backups/my-calendar
+InaccessiblePaths=/etc/my-calendar
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true

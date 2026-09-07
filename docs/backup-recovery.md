@@ -29,6 +29,30 @@ Optional environment settings:
 
 The SSH target and identity remain in the existing ignored deployment configuration. This command creates backup files only. It does not install a timer, replace the production database, update credentials, restart the service, scan Gmail or call a model/provider.
 
+## Daily server backup
+
+The dedicated `my-calendar-backup.timer` is installed and enabled. Its calendar schedule is **03:15 UTC daily**, with up to **15 minutes of randomized delay** and one-second timer accuracy. `Persistent=true` allows a missed scheduled run to be caught up when the timer is activated again. This is a server-local backup schedule; it does not automatically copy backups off-host or send email/push alerts.
+
+The corresponding oneshot service runs only the root-owned `/opt/my-calendar/ops/backup-calendar.py` with the standard Python library. It uses the existing database and `/var/backups/my-calendar`, a 120-second backup-operation limit, a 180-second service limit, and the 14-day/minimum-three retention policy. It has no environment file or key access. The live database directory is mounted read-only, the backup directory is its only persistent writable path, and production configuration is inaccessible. It also has a private temporary directory and network namespace, no new privileges, and only the read-search capability required to read the calendar account's private database. CPU and memory limits reduce competition with the application.
+
+For a reproducible installation, place `backup-calendar.py`, `my-calendar-backup.service.example`, `my-calendar-backup.timer.example` and `install-backup-service.sh` together on the calendar server, then run:
+
+```bash
+sudo bash /path/to/reviewed/ops/install-backup-service.sh
+```
+
+The installer validates the units, refuses symlink or differing existing installation targets, and starts the restricted backup service once before enabling its timer. It reloads systemd's unit definitions but does not restart the calendar or unrelated services. If an existing backup utility/unit differs, inspect and perform an intentional upgrade rather than bypassing the refusal blindly. The source database must already exist; installation does not create a calendar database.
+
+To inspect operation without reading calendar contents or configuration:
+
+```bash
+systemctl status my-calendar-backup.timer
+systemctl show my-calendar-backup.service -p Result -p ExecMainStatus
+systemctl list-timers my-calendar-backup.timer
+```
+
+The scheduled service validates SQLite integrity and writes a checksum manifest. It deliberately cannot verify decryption, because it cannot read the encryption key. Use the manual off-host workflow above periodically and after significant storage changes for that additional check. Inspect failed unit status and failed/missing backup manifests; no automatic failure notification is configured.
+
 ## Run the pieces separately
 
 On the machine that owns the database, use an existing source and a private destination:
@@ -58,7 +82,7 @@ No plaintext is written. The original backup is checked for changes, and an exis
 
 Successful backup runs prune this utility's completed bundles older than **14 days**, while preserving at least the **three newest**. The minimum can retain copies longer than 14 days when backups are infrequent. Unrelated directories and symlinks are ignored. `--keep-days` and `--keep-minimum` configure this policy; `--prune-only` applies it without making a new snapshot. Local and server copies use the same defaults. Backup copies can outlive records deleted from the live app.
 
-There is currently **no automatic backup schedule**. The recovery point is the latest successful snapshot, not an implied daily guarantee. The remote wrapper provides an off-host copy on the operator's machine, but loss of both machines still requires another independently protected backup location.
+The recovery point is the latest **successful** snapshot, not a guaranteed interval: a timer can run late or fail. Automatic backups are kept on the same server as the application. The manual remote wrapper provides a separately verified off-host copy on the operator's machine, but it is not scheduled. Loss of the server can therefore lose newer snapshots than that last off-host copy; loss of both machines still requires another independently protected backup location.
 
 The encryption key is deliberately absent from every bundle. Preserve the matching key separately in secure recovery storage, with a record of which snapshots it unlocks. Keep deployment credentials/configuration and the matching application source release recoverable separately too. A local environment file proving decryptability is **not** evidence that an independent recovery copy of the key exists. Manifests and reports therefore leave separate key-backup verification false. Never rotate away or discard an old key while retained backups still require it.
 
@@ -72,7 +96,7 @@ Production replacement requires an explicit maintenance decision. Before any rep
 4. Review the snapshot's pending work, notification jobs, Gmail checkpoint and cost ledger against the time since backup. A restore can replay pending operations, omit newer records, revive old access tokens/feed links, or understate spend incurred after the snapshot. Resolve these before resuming external work; reconnect revoked Google access if needed.
 5. Only after the staged recovery is accepted, switch the production database during maintenance, start one service instance, and verify authenticated access and persistence. Keep the pre-recovery state available until recovery is accepted.
 
-The current rehearsal proves snapshot integrity and decryptability in isolated storage. It does **not** prove a full production restore, provider reconnection, a recovery-time objective, or an independently escrowed key. No live data replacement or service interruption is part of these utilities.
+The current rehearsal proves snapshot integrity and decryptability in isolated storage. It does **not** prove a full production restore, provider reconnection, a recovery-time objective, or an independently escrowed key. No live data replacement or calendar service interruption is part of these utilities.
 
 ## Verification evidence
 
@@ -84,3 +108,5 @@ node --import tsx --test test/backup-recovery.test.ts
 ```
 
 Actual backup identifiers, record counts and verification times belong only in ignored `ops/local/backup-reports/`. Public documentation records capabilities and limitations, not mailbox contents or infrastructure identities.
+
+The daily service was also exercised on the running server during installation. Its structural integrity, checksum, private file modes, sandbox settings and timer status are recorded in ignored `ops/local/backup-schedule/installation.json`. A follow-up in `running-wal-check.json` confirms the source WAL existed and the calendar stayed active with the same process throughout a successful backup under the read-only mount. The previously verified off-host snapshot remains a separate decryptability rehearsal; installing the timer does not imply independent key escrow or a production restore.

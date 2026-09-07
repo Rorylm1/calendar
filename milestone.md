@@ -1,6 +1,6 @@
 # Personal calendar — milestones
 
-Updated: 7 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 105 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in review alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Real suggestions are available in Review.
+Updated: 7 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 112 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in review alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Real suggestions are available in Review.
 
 ## Objective
 
@@ -172,9 +172,11 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [ ] Verify accepted input is retained, failed work can retry, and connection or processing problems are visible.
 - [x] Verify synthetically that stale proposals cannot overwrite manual edits and that approved changes/cancellations produce correct feed revisions and alarms; device refresh remains under milestone 3.
 - [x] Verify encrypted storage, owner/origin access, synthetic retention and redacted errors, feed-token revocation, online backup and isolated integrity/decryption restore checks. One real snapshot was copied off-host and verified without changing the live database.
+- [x] Install and verify daily server backups, including a snapshot while the live database has an active WAL. Scheduled copies are host-only; off-host copying is a separate verified operator step.
 - [ ] Preserve and verify an independent recovery copy of the encryption key and rehearse complete application/provider recovery; isolated database verification alone does not establish this.
 - [ ] Use the app privately for an initial week and record missed relevant items, irrelevant suggestions, correction effort, and measured running cost.
-- [ ] Grow the labelled evaluation set toward 50 varied examples from synthetic or appropriately sanitized messages. Track precision/recall against the plan's 90% target, including triage misses; treat this as a quality measurement rather than an arbitrary barrier to private use.
+- [x] Build a labelled set of 50 synthetic examples with an offline validator, field scorer and guarded model runner. Cases cover all major bookings, receipts, adverts, attendance, changes and duplicates; labels and scenario IDs stay out of model input.
+- [ ] Measure the 50-case model baseline, inspect mismatches and track precision/recall including triage misses. Synthetic coverage does not establish real-mail accuracy.
 - [ ] Fix failures that cause lost messages, duplicate events, invented details, unapproved writes, or misleading reminder behaviour before calling the private version dependable.
 - [x] Keep grouped review push opt-in, baseline existing suggestions, use overnight quiet hours and expose an off switch. Actual review habits and device delivery remain to be evaluated; no event-reminder fallback has been added.
 

@@ -3,6 +3,15 @@ import { appOrigin, isOwner, type CalendarSettings, type OwnerSession } from './
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const fail = (code: string, message: string, status: number) => json({ error: { code, message } }, status);
+function backendFailureReason(error: unknown) {
+  const value = error as { name?: string; code?: string; cause?: { code?: string } } | null;
+  const code = value?.cause?.code || value?.code;
+  if (['TimeoutError', 'AbortError'].includes(value?.name || '') || ['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT'].includes(code || '')) return 'timeout';
+  if (['ENOTFOUND', 'EAI_AGAIN'].includes(code || '')) return 'dns';
+  if (['CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'].includes(code || '')) return 'tls';
+  if (['ECONNREFUSED', 'ECONNRESET', 'EPIPE'].includes(code || '')) return 'connection';
+  return 'network';
+}
 const routeAllowed = (method: string, path: string) =>
   (method === 'GET' && ['state', 'gmail/callback', 'calendar/feed', 'notifications'].includes(path)) ||
   (method === 'POST' && (/^gmail\/(connect|sync|disconnect|retry-processing)$/.test(path) || ['events', 'calendar/feed/enable', 'calendar/feed/rotate', 'notifications'].includes(path) || /^proposals\/[A-Za-z0-9_-]+\/(confirm|dismiss)$/.test(path))) ||
@@ -30,10 +39,28 @@ export function createCalendarHandler(deps: { session: () => Promise<OwnerSessio
     const secure = origin.startsWith('https:');
     const cookieName = secure ? '__Host-calendar-gmail-state' : 'calendar-gmail-state';
     const stateCookie = (value: string, age: number) => `${cookieName}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
-    const call = (backendPath: string, method: string, body?: unknown) => (deps.fetch || fetch)(`${backend.href.replace(/\/$/, '')}/v1/${backendPath}`, {
-      method, headers: { Authorization: `Bearer ${settings.CALENDAR_SERVICE_TOKEN}`, 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', signal: AbortSignal.timeout(25000), redirect: 'manual',
-    });
+    const call = async (backendPath: string, method: string, body?: unknown) => {
+      const attempts = method === 'GET' ? 2 : 1;
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+          const response = await (deps.fetch || fetch)(`${backend.href.replace(/\/$/, '')}/v1/${backendPath}`, {
+            method, headers: { Authorization: `Bearer ${settings.CALENDAR_SERVICE_TOKEN}`, 'Content-Type': 'application/json' },
+            body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', signal: AbortSignal.timeout(method === 'GET' ? 10000 : 25000), redirect: 'manual',
+          });
+          if ([502, 503, 504].includes(response.status)) {
+            console.warn('calendar_backend_request_failed', { operation: method === 'GET' ? 'read' : 'write', reason: 'upstream_unavailable', attempt });
+            if (attempt < attempts) { await response.body?.cancel(); continue; }
+          }
+          return response;
+        } catch (error) {
+          // Fixed categories only: never log request bodies, URLs, identifiers,
+          // credentials or raw provider/network error messages.
+          console.warn('calendar_backend_request_failed', { operation: method === 'GET' ? 'read' : 'write', reason: backendFailureReason(error), attempt });
+          if (attempt === attempts) throw error;
+        }
+      }
+      throw new Error('Backend request did not complete');
+    };
     const callbackRedirect = (result: string) => new Response(null, { status: 303, headers: { Location: `${origin}/calendar?gmail=${result}`, 'Set-Cookie': stateCookie('', 0), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } });
     try {
       if (path === 'gmail/callback') {

@@ -91,3 +91,26 @@ test('private feed settings and push controls retain owner and origin checks', a
   assert.equal((await request('notifications/send', 'POST', { origin: settings.CALENDAR_APP_ORIGIN! }, '{}')).status, 404);
   assert.equal(calls.length, 0);
 });
+test('transient reads retry once, writes never replay, and diagnostics contain no secrets', async context => {
+  const logs: unknown[][] = []; context.mock.method(console, 'warn', (...args: unknown[]) => logs.push(args));
+  for (const method of ['GET', 'POST']) {
+    let calls = 0;
+    const handle = createCalendarHandler({ session: async () => owner, settings: () => settings, fetch: async () => {
+      if (++calls === 1) throw Object.assign(new Error('Private URL and bearer must not enter logs'), { cause: { code: 'ECONNRESET' } });
+      return Response.json({ configured: true });
+    } });
+    const response = await handle(new Request('https://calendar.example.test/api/calendar/notifications', { method, headers: { origin: settings.CALENDAR_APP_ORIGIN! }, body: method === 'POST' ? '{}' : undefined }), { params: Promise.resolve({ path: ['notifications'] }) });
+    assert.equal(calls, method === 'GET' ? 2 : 1); assert.equal(response.status, method === 'GET' ? 200 : 503);
+  }
+  assert.equal(logs.length, 2); assert.equal(JSON.stringify(logs).includes('Private URL'), false); assert.equal(JSON.stringify(logs).includes('synthetic-server-only-token'), false);
+  assert.deepEqual(logs[0], ['calendar_backend_request_failed', { operation: 'read', reason: 'connection', attempt: 1 }]);
+});
+test('gateway failures can retry a read but never replay a calendar write', async context => {
+  context.mock.method(console, 'warn', () => undefined);
+  for (const method of ['GET', 'POST']) {
+    let calls = 0;
+    const handle = createCalendarHandler({ session: async () => owner, settings: () => settings, fetch: async () => ++calls === 1 ? new Response('Gateway unavailable', { status: 502 }) : Response.json({ configured: true }) });
+    const response = await handle(new Request('https://calendar.example.test/api/calendar/notifications', { method, headers: { origin: settings.CALENDAR_APP_ORIGIN! }, body: method === 'POST' ? '{}' : undefined }), { params: Promise.resolve({ path: ['notifications'] }) });
+    assert.equal(calls, method === 'GET' ? 2 : 1); assert.equal(response.status, method === 'GET' ? 200 : 503);
+  }
+});
