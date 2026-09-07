@@ -1,0 +1,31 @@
+# Dependencies and generated output
+node_modules/
+.next/
+.vercel/
+.wrangler/
+.vinext/
+dist/
+out/
+coverage/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# Credentials, databases and private operational records
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sqlite*
+server/data/
+ops/local/
+ops/releases/
+ops/Caddyfile.calendar
+ops/install-calendar-tls.sh
+ops/public/
+server/smoke/
+
+# The original Sites study is a separate local repository. Its UI is retained
+# in the Vercel app at /designs; do not accidentally publish a nested gitlink.
+research/designs/

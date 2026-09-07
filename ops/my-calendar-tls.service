@@ -1,0 +1,32 @@
+[Unit]
+Description=Personal Calendar HTTPS proxy
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=my-calendar-tls
+Group=my-calendar-tls
+WorkingDirectory=/var/lib/my-calendar-tls
+Environment=XDG_DATA_HOME=/var/lib/my-calendar-tls/data
+Environment=XDG_CONFIG_HOME=/var/lib/my-calendar-tls/config
+ExecStart=/usr/bin/caddy run --config /etc/my-calendar-tls/Caddyfile --adapter caddyfile
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0077
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/my-calendar-tls
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=192M
+CPUQuota=25%
+
+[Install]
+WantedBy=multi-user.target

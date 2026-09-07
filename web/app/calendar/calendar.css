@@ -1,0 +1,464 @@
+.personal-viewport {
+  container-type: inline-size;
+  container-name: calendar;
+  min-height: 100vh;
+}
+.personal-calendar,
+.personal-calendar .edge-layout {
+  min-height: 100vh;
+}
+.personal-calendar .edge-content {
+  padding: 0 34px 20px;
+}
+.personal-header {
+  height: 72px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.personal-wordmark {
+  text-decoration: none;
+  font-size: 23px;
+  font-weight: 500;
+  letter-spacing: -1px;
+}
+.personal-wordmark span {
+  color: var(--accent);
+}
+.personal-private {
+  font-size: 12px;
+  color: var(--soft);
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+}
+.personal-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+}
+.personal-sign-out{color:var(--soft)!important}
+@media(max-width:700px){.personal-sign-out span{display:none}.personal-header-actions{gap:5px}}
+.personal-count {
+  font-size: 11px;
+  font-weight: 500;
+  min-width: 19px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--selected);
+  color: var(--accent);
+}
+.personal-calendar .r2-month-heading {
+  padding: 27px 0;
+}
+.personal-calendar .day-cell {
+  min-height: clamp(100px, 13vh, 150px);
+}
+.personal-calendar .r2-rail {
+  padding-top: 29px;
+}
+.personal-calendar .r2-rail-mark {
+  margin-bottom: 33px;
+}
+.personal-calendar .edge-peek {
+  max-height: 390px;
+}
+.personal-calendar .detail-time {
+  line-height: 1.6;
+}
+.personal-empty-day {
+  padding: 18px 0 4px;
+  color: var(--soft);
+  font-size: 14px;
+}
+.personal-empty-day p {
+  margin-bottom: 13px;
+}
+.personal-empty-day .quiet-action {
+  padding-left: 0 !important;
+}
+.personal-banner,
+.personal-connect-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 13px;
+  margin: 0 0 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 17px;
+}
+.personal-banner {
+  color: #edc6a7;
+  border-color: #705943;
+  background: #352d25;
+}
+.personal-banner button,
+.personal-banner a,
+.personal-connect-strip button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.personal-connect-strip {
+  background: var(--surface);
+  color: var(--soft);
+}
+.personal-connect-strip > span,
+.personal-connect-strip button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.personal-connect-strip button {
+  color: var(--accent);
+}
+.personal-sync {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.connection-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--soft);
+}
+.connection-dot.connected {
+  background: var(--accent);
+}
+.personal-loading {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: var(--soft);
+  padding: 0 0 18px;
+  font-size: 13px;
+}
+.personal-dialog {
+  width: min(560px, calc(100vw - 32px)) !important;
+  max-width: 560px !important;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}
+.personal-dialog .dialog-title {
+  padding-right: 24px;
+  line-height: 1.25;
+}
+.personal-dialog .dialog-description {
+  margin-bottom: 8px;
+}
+.connection-heading {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 8px 0 24px;
+}
+.connection-heading h3 {
+  font-size: 20px;
+  font-weight: 500;
+}
+.connection-heading p {
+  font-size: 13px;
+  margin-top: 6px;
+  color: var(--soft);
+}
+.connection-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--accent);
+}
+.connection-state {
+  font-size: 11px;
+  color: var(--soft);
+  margin-left: auto;
+}
+.connection-explainer,
+.proposal-reason {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--soft);
+  margin: 14px 0;
+}
+.connection-facts {
+  margin: 23px 0;
+}
+.connection-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.connection-facts dt {
+  color: var(--soft);
+}
+.connection-facts dd {
+  margin: 0;
+  text-align: right;
+}
+.connection-small,
+.form-help {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--soft);
+  margin: 20px 0 0;
+}
+.personal-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 22px 0 4px;
+}
+.personal-inline-error {
+  padding: 12px 15px;
+  border: 1px solid #7b6150;
+  border-radius: 7px;
+  color: #f1c6a8;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.personal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 12px;
+}
+.personal-form .form-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 17px;
+}
+.personal-form .field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+.personal-form .field-label small {
+  color: var(--soft);
+  font-size: 11px;
+}
+.personal-form input,
+.personal-form textarea,
+.personal-form select {
+  width: 100%;
+  max-width: 100%;
+  font-size: 14px !important;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  min-height: 42px;
+  border-radius: 7px;
+  padding: 9px 11px;
+  box-sizing: border-box;
+}
+.personal-form input[type='date'],
+.personal-form input[type='time'] {
+  display: block;
+  min-width: 0;
+  color-scheme: dark;
+}
+.personal-form .primary-action {
+  align-self: flex-start;
+  margin-top: 1px;
+}
+.personal-form .form-help {
+  margin-top: 0;
+}
+.more-details {
+  margin-top: 2px;
+}
+.personal-dialog summary {
+  cursor: pointer;
+  color: var(--soft);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.more-details[open] > summary {
+  margin-bottom: 18px;
+}
+.more-details > .field-label,
+.more-details > .form-pair {
+  margin-top: 18px;
+}
+.personal-dialog blockquote {
+  border-left: 2px solid var(--line);
+  padding: 8px 0 8px 15px;
+  margin: 12px 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--soft);
+  white-space: pre-wrap;
+}
+.proposal-unresolved {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #dfc5a2;
+  margin: 14px 0;
+}
+.cancel-review h3 {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 15px 0;
+}
+.cancel-review p {
+  font-size: 14px;
+  color: var(--soft);
+  line-height: 1.8;
+  margin: 12px 0;
+}
+.cancel-review > .primary-action {
+  margin-top: 18px;
+}
+.personal-dialog .booking-description {
+  white-space: pre-wrap;
+}
+.personal-dialog .booking-when {
+  line-height: 1.8;
+  font-size: 15px;
+}
+.personal-dialog .booking-location {
+  margin-top: 18px;
+}
+.personal-dialog .booking-reference {
+  width: 100%;
+}
+.personal-notice {
+  bottom: 28px;
+}
+.spinning {
+  animation: calendar-spin 1s linear infinite;
+}
+@keyframes calendar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+}
+@container calendar (max-width:820px) {
+  .personal-calendar .edge-content {
+    padding: 0 22px 20px;
+  }
+  .personal-calendar .edge-peek {
+    max-height: none;
+  }
+  .personal-calendar .r2-month-heading {
+    padding: 24px 0;
+  }
+  .personal-calendar .edge-peek .day-heading {
+    padding-right: 35px;
+  }
+}
+@container calendar (max-width:720px) {
+  .personal-calendar .edge-content {
+    padding: 0 16px 20px;
+  }
+  .personal-header {
+    height: 66px;
+    gap: 13px;
+  }
+  .personal-wordmark {
+    font-size: 22px;
+  }
+  .personal-private {
+    display: none;
+  }
+  .personal-header-actions {
+    gap: 3px;
+  }
+  .personal-header-actions .quiet-action {
+    padding: 8px !important;
+    font-size: 12px !important;
+  }
+  .personal-header-actions .quiet-action > span {
+    display: none;
+  }
+  .personal-calendar .day-cell {
+    min-height: 80px;
+  }
+  .personal-calendar .mobile-event-count {
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .personal-calendar .r2-month-meta {
+    display: none;
+  }
+  .personal-connect-strip {
+    align-items: flex-start;
+    padding: 13px;
+    font-size: 12px;
+    gap: 14px;
+  }
+  .personal-connect-strip > span {
+    line-height: 1.7;
+    gap: 8px;
+  }
+  .personal-connect-strip > span > svg {
+    display: none;
+  }
+  .personal-connect-strip button {
+    font-size: 12px;
+    margin-top: 3px;
+    gap: 5px;
+  }
+  .personal-banner {
+    align-items: flex-start;
+    line-height: 1.8;
+  }
+  .personal-calendar .r2-foot > span:last-child {
+    display: none;
+  }
+  .personal-dialog {
+    padding: 27px 20px !important;
+  }
+  .connection-heading {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .connection-state {
+    margin-left: 60px;
+    margin-top: -15px;
+  }
+  .connection-facts > div {
+    font-size: 12px;
+  }
+  .personal-form .form-pair {
+    gap: 12px;
+  }
+  .personal-dialog .dialog-title {
+    font-size: 25px !important;
+  }
+}
+
+.error-recovery {
+  display: block;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding: 8px 0 0;
+  font-size: 13px;
+}

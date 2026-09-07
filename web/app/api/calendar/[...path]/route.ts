@@ -1,0 +1,10 @@
+import { auth } from '@/auth';
+import { createCalendarHandler } from '@/lib/calendar-proxy';
+import { getCalendarSettings } from '@/lib/settings';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+const handle = createCalendarHandler({ session: async () => auth(), settings: getCalendarSettings });
+export const GET = handle;
+export const POST = handle;
+export const PATCH = handle;
+export const DELETE = handle;

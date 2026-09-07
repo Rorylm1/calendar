@@ -1,0 +1,34 @@
+[Unit]
+Description=Personal Calendar API and background jobs
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=my-calendar
+Group=my-calendar
+WorkingDirectory=/opt/my-calendar/current
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=8100
+Environment=PATH=/opt/my-calendar/runtime/node/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/my-calendar/calendar.env
+# tsx is a production dependency; source is immutable inside each release.
+ExecStart=/opt/my-calendar/runtime/node/bin/node --import tsx /opt/my-calendar/current/src/index.ts
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/my-calendar
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=768M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

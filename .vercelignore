@@ -1,0 +1,11 @@
+.git
+research
+server
+ops
+**/.env
+**/.env.*
+**/node_modules
+**/.next
+**/data
+**/*.sqlite*
+**/*.log
