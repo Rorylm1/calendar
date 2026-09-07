@@ -2,6 +2,10 @@
 
 The GitHub repository contains the frontend and the persistent Gmail service. Vercel builds only `web/`.
 
+Production: [rory-calendar.vercel.app](https://rory-calendar.vercel.app/calendar). Repository: [Rorylm1/calendar](https://github.com/Rorylm1/calendar). The Vercel account was verified as `rorylm1` and the project belongs to `rorylm1s-projects`.
+
+Deployment was verified on 7 September 2026: the production build passed, real Google sign-in completed, the existing Gmail connection and saved plans loaded, and anonymous or forged-header API requests returned 401. All 53 backend tests and 12 frontend auth/proxy tests passed. The Gmail reconnect callback now uses the Vercel origin, preserving the existing grant and backend owner identifier.
+
 ## Project settings
 
 - Framework: Next.js

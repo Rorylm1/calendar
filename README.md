@@ -2,6 +2,8 @@
 
 A personal calendar that turns commitments and dated bookings from Gmail into plans you can review. The Edge interface keeps the month in focus, with quiet details for each day.
 
+[Open the calendar](https://rory-calendar.vercel.app/calendar) · [Explore the design studies](https://rory-calendar.vercel.app/designs)
+
 Bookings include flights, trains, restaurants, hotels, tickets and appointments. Ordinary purchase receipts and promotions do not count as commitments. Suggestions stay in Review until you accept them.
 
 ## Project layout
