@@ -8,6 +8,8 @@ Copy `deployment.env.example` to `ops/local/deployment.env` and set the SSH targ
 
 The SSH helper requires an existing trusted host key and uses non-interactive authentication. Check the expected host independently before adding it to your known-hosts file.
 
+For a slow operator connection, `CALENDAR_SSH_CONNECT_TIMEOUT` can override the eight-second connection timeout (1–60 seconds). An optional `CALENDAR_SSH_CONTROL_PATH` reuses an operator-created SSH control socket across deployment steps; omit it for ordinary connections. Neither option changes remote SSH settings or bypasses host-key verification.
+
 The helper uses `IPQoS=none` to avoid connection stalls on some operator networks. If local HTTPS probes stall during TLS 1.3 negotiation while the hosted app remains reachable, run with `CALENDAR_PROBE_TLS12=true` to use verified TLS 1.2 for the deployment checks. This does not change the server's TLS configuration or disable certificate validation.
 
 ## Server layout

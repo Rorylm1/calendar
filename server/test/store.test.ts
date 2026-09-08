@@ -14,7 +14,7 @@ test('source and event content are encrypted in SQLite, not just OAuth credentia
   const { store } = fixture(); store.createEvent(fields({ title: 'Private dinner title' }));
   const raw = JSON.stringify(store.db.prepare('SELECT * FROM records').all()); assert.ok(!raw.includes('Private dinner title')); store.close();
 });
-test('confirmation is approval-only and idempotent; repeat preserves one event', () => {
+test('explicit exception confirmation is idempotent; repeat preserves one event', () => {
   const { store } = fixture(); const item = store.putProposal(proposal())!; assert.equal(store.events().length, 0);
   const first = store.confirm(item.id); const second = store.confirm(item.id); assert.deepEqual(second, first); assert.equal(store.events().length, 1); store.close();
 });

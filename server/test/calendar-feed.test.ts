@@ -7,6 +7,7 @@ import ICAL from 'ical.js';
 import { buildApp } from '../src/app.ts';
 import { calendarFeedSettings, renderCalendarFeed } from '../src/calendar-feed.ts';
 import { EventFields, EventPatch } from '../src/domain.ts';
+import { hash } from '../src/crypto.ts';
 import { Store, type EventExportMetadata } from '../src/store.ts';
 import { fixture, fields, proposal, source } from './helpers.ts';
 
@@ -84,7 +85,7 @@ test('missing public origin fails closed and feed settings reject unexpected mut
   } finally { await app.close(); store.close(); }
 });
 
-test('an independent ICS parser sees only confirmed events and never source evidence, references, credentials, or invitations', async () => {
+test('an independent ICS parser sees only saved events and never source evidence, references, credentials, or pending invitations', async () => {
   const { app, store, headers } = setup();
   try {
     store.capture(source('private-source', 'SOURCE_TEXT_SHOULD_NOT_EXPORT'));
@@ -243,5 +244,105 @@ test('reminders are strictly validated, default to fifteen minutes, support at-s
     const unchanged = fields({ title: 'Existing proposal without a reminder preference' });
     assert.ok(store.putProposal(proposal({ event: unchanged })));
     assert.equal(store.putProposal(proposal({ event: EventFields.parse({ ...unchanged, reminderMinutes: undefined }) })), undefined);
+  } finally { store.close(); }
+});
+
+
+test('a pre-existing grant and legacy event keep their URL, UID and encrypted token bytes', async () => {
+  const { app, config, store, headers } = setup();
+  try {
+    const token = 'L'.repeat(43);
+    const oldGrant = { token, tokenHash: hash(token), updatedAt: '2026-09-07T12:00:00Z' };
+    store.put('calendar_feed_grant', 'default', oldGrant);
+    const event = store.createEvent(fields({ title: 'Legacy confirmed plan' }));
+    store.put('events', event.id, { ...event, attendance: undefined });
+    const grantBytes = () => (store.db.prepare("SELECT payload FROM records WHERE bucket='calendar_feed_grant'").get() as { payload: string }).payload;
+    const before = grantBytes();
+    const settings = (await app.inject({ method: 'GET', url: '/v1/calendar/feed', headers })).json();
+    assert.equal(settings.url, `${origin}/calendar/feed/${token}.ics`);
+    assert.equal(settings.updatedAt, oldGrant.updatedAt);
+    assert.deepEqual(store.get('calendar_feed_grant'), oldGrant); assert.equal(grantBytes(), before);
+    const exported = components((await app.inject({ method: 'GET', url: pathOf(settings.url) })).body);
+    assert.equal(exported.length, 1); assert.equal(exported[0]!.getFirstPropertyValue('uid'), `${hash(event.id)}@personal-calendar`);
+    assert.equal(exported[0]!.getFirstPropertyValue('status'), 'CONFIRMED');
+    assert.equal(exported[0]!.getFirstPropertyValue('transp'), 'OPAQUE');
+    assert.equal(calendarFeedSettings(config, store).url, settings.url); assert.equal(grantBytes(), before);
+    assert.equal((await app.inject({ method: 'POST', url: '/v1/calendar/feed/enable', headers })).json().url, settings.url);
+    assert.equal(grantBytes(), before);
+    assert.equal('invitationUrl' in settings, false);
+    assert.equal((await app.inject({ method: 'GET', url: `/calendar/feed/${token}/invitations.ics` })).statusCode, 401);
+  } finally { await app.close(); store.close(); }
+});
+
+test('one private feed contains confirmed plans and clearly labelled tentative invitations without alarms', async () => {
+  const { app, store, headers } = setup();
+  try {
+    const confirmed = store.createEvent(fields({ title: 'Confirmed dinner', attendance: 'confirmed' }));
+    const invitation = store.createEvent(fields({ title: 'Birthday, drinks; friends', attendance: 'invited', reminderMinutes: 120 }));
+    store.createEvent(fields({ title: 'Without reminder preference', attendance: 'invited' }));
+    store.createEvent(fields({ title: 'At start reminder', attendance: 'invited', reminderMinutes: 0 }));
+    store.createEvent(fields({ title: 'Date-only invitation', attendance: 'invited', time: undefined }));
+    store.putProposal(proposal({ event: fields({ title: 'UNRESOLVED_SHOULD_NOT_EXPORT' }), evidence: ['EVIDENCE_SHOULD_NOT_EXPORT'] }));
+    const settings = (await app.inject({ method: 'POST', url: '/v1/calendar/feed/enable', headers })).json();
+    const body = (await app.inject({ method: 'GET', url: pathOf(settings.url) })).body;
+    const calendar = parse(body); const exported = calendar.getAllSubcomponents('vevent');
+    assert.equal(exported.length, 5);
+    const booked = exported.find(component => component.getFirstPropertyValue('uid') === `${hash(confirmed.id)}@personal-calendar`)!;
+    assert.equal(booked.getFirstPropertyValue('summary'), 'Confirmed dinner');
+    assert.equal(booked.getFirstPropertyValue('status'), 'CONFIRMED'); assert.equal(booked.getFirstPropertyValue('transp'), 'OPAQUE');
+    assert.equal(booked.getAllSubcomponents('valarm').length, 1);
+    const invitations = exported.filter(component => component !== booked); assert.equal(invitations.length, 4);
+    for (const component of invitations) {
+      assert.equal(component.getFirstPropertyValue('status'), 'TENTATIVE');
+      assert.equal(component.getFirstPropertyValue('transp'), 'TRANSPARENT');
+      assert.match(new ICAL.Event(component).summary, /^INVITATION: /);
+      assert.equal(component.getAllSubcomponents('valarm').length, 0);
+      assert.equal(component.hasProperty('organizer'), false); assert.equal(component.hasProperty('attendee'), false);
+    }
+    const birthday = invitations.find(component => component.getFirstPropertyValue('uid') === `${hash(invitation.id)}@personal-calendar`)!;
+    assert.equal(birthday.getFirstPropertyValue('summary'), 'INVITATION: Birthday, drinks; friends');
+    assert.ok(!body.includes('SHOULD_NOT_EXPORT'));
+    assert.equal(calendar.hasProperty('color'), false); assert.equal(calendar.hasProperty('x-apple-calendar-color'), false);
+    const rotated = (await app.inject({ method: 'POST', url: '/v1/calendar/feed/rotate', headers })).json();
+    assert.equal((await app.inject({ method: 'GET', url: pathOf(settings.url) })).statusCode, 404);
+    assert.equal(components((await app.inject({ method: 'GET', url: pathOf(rotated.url) })).body).length, 5);
+    await app.inject({ method: 'DELETE', url: '/v1/calendar/feed', headers });
+    assert.equal((await app.inject({ method: 'GET', url: pathOf(rotated.url) })).statusCode, 404);
+  } finally { await app.close(); store.close(); }
+});
+
+test('accepting an invitation updates the same UID, removes its label and restores its saved reminder preference', () => {
+  const { store } = fixture();
+  try {
+    const invitation = store.createEvent(fields({ title: 'Birthday drinks', attendance: 'invited', reminderMinutes: 60 }));
+    const old = components(renderCalendarFeed(store).body)[0]!;
+    assert.equal(old.getFirstPropertyValue('summary'), 'INVITATION: Birthday drinks');
+    const accepted = store.patchEvent(invitation.id, { attendance: 'confirmed' }, invitation.revision);
+    const exported = components(renderCalendarFeed(store).body); assert.equal(exported.length, 1);
+    const current = exported[0]!;
+    assert.equal(current.getFirstPropertyValue('uid'), old.getFirstPropertyValue('uid'));
+    assert.equal(current.getFirstPropertyValue('sequence'), 1);
+    assert.equal(current.getFirstPropertyValue('created')?.toString(), old.getFirstPropertyValue('created')?.toString());
+    assert.equal(current.getFirstPropertyValue('summary'), 'Birthday drinks');
+    assert.equal(current.getFirstPropertyValue('status'), 'CONFIRMED'); assert.equal(current.getFirstPropertyValue('transp'), 'OPAQUE');
+    assert.equal((current.getFirstSubcomponent('valarm')!.getFirstPropertyValue('trigger') as ICAL.Duration).toSeconds(), -3600);
+    assert.equal(store.events()[0]!.title, 'Birthday drinks');
+    store.deleteEvent(accepted.id, accepted.revision);
+    assert.equal(components(renderCalendarFeed(store).body).length, 0);
+  } finally { store.close(); }
+});
+
+test('legacy prefixed titles are labelled once and lose the presentation label on confirmation without changing stored titles', () => {
+  const { store } = fixture();
+  try {
+    const invitation = store.createEvent(fields({ title: 'Ordinary canonical title', attendance: 'invited' }));
+    const legacyTitle = 'Invitation: INVITATION: Birthday drinks';
+    store.put('events', invitation.id, { ...invitation, title: legacyTitle });
+    assert.equal(components(renderCalendarFeed(store).body)[0]!.getFirstPropertyValue('summary'), 'INVITATION: Birthday drinks');
+    assert.equal(store.events()[0]!.title, legacyTitle);
+    store.patchEvent(invitation.id, { attendance: 'confirmed' }, invitation.revision);
+    assert.equal(components(renderCalendarFeed(store).body)[0]!.getFirstPropertyValue('summary'), 'Birthday drinks');
+    store.put('events', invitation.id, { ...invitation, title: 'INVITATION: Invitation:' });
+    assert.equal(components(renderCalendarFeed(store).body)[0]!.getFirstPropertyValue('summary'), 'INVITATION: Untitled plan');
   } finally { store.close(); }
 });

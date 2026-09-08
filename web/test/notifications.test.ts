@@ -4,15 +4,15 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { subscribeDevice, stopDeviceNotifications } from '../lib/push-client.ts';
 
-test('the service worker displays no source payload and opens only its own review screen', async () => {
+test('the service worker displays no source payload and opens only its own calendar', async () => {
   const handlers: Record<string, (event: any) => void> = {}; const shown: any[] = []; const opened: string[] = []; let awaited: Promise<void>;
   const self = { addEventListener: (type: string, callback: (event: any) => void) => { handlers[type] = callback; }, location: { origin: 'https://calendar.example.test' }, registration: { showNotification: async (...args: any[]) => { shown.push(args); } }, clients: { matchAll: async () => [], openWindow: async (url: string) => { opened.push(url); } } };
   vm.runInNewContext(readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8'), { self, URL });
   const payload = { data: { json: () => ({ title: 'Private booking', body: 'Sensitive evidence', url: 'https://evil.example' }) }, waitUntil: (value: Promise<void>) => { awaited = value; } };
   handlers.push!(payload); await awaited!;
-  assert.equal(shown[0][0], 'My Calendar'); assert.equal(JSON.stringify(shown).includes('Sensitive'), false); assert.equal(shown[0][1].tag, 'calendar-review');
+  assert.equal(shown[0][0], 'My Calendar'); assert.equal(JSON.stringify(shown).includes('Sensitive'), false); assert.equal(shown[0][1].tag, 'calendar-updates');
   handlers.notificationclick!({ notification: { data: { url: 'https://evil.example' }, close() {} }, waitUntil: payload.waitUntil }); await awaited!;
-  assert.deepEqual(opened, ['https://calendar.example.test/calendar?review=1']); assert.equal(handlers.fetch, undefined);
+  assert.deepEqual(opened, ['https://calendar.example.test/calendar']); assert.equal(handlers.fetch, undefined);
 });
 test('permission is requested immediately and denial does not create a subscription', async () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'Notification'); let requested = false; let subscribed = false;

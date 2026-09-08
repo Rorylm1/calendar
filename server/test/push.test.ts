@@ -13,7 +13,7 @@ import { AppError } from '../src/errors.ts';
 import { Store } from '../src/store.ts';
 import { hash } from '../src/crypto.ts';
 import { config as baseConfig, proposal, source } from './helpers.ts';
-import { PUSH_BODY_LIMIT, PUSH_SETTLE_MS, PUSH_SUBSCRIPTION_LIMIT, REVIEW_PUSH_PAYLOAD, ReviewPushWorker, createPushSender, isPublicPushAddress, pushQuietHours, registerPushRoutes, resolvePushTarget, validatePushConfig, validatePushEndpoint, validatePushSubscription, type PushConfig, type PushSend } from '../src/push.ts';
+import { PUSH_BODY_LIMIT, PUSH_SETTLE_MS, PUSH_SUBSCRIPTION_LIMIT, CALENDAR_PUSH_PAYLOAD, ReviewPushWorker, createPushSender, isPublicPushAddress, pushQuietHours, registerPushRoutes, resolvePushTarget, validatePushConfig, validatePushEndpoint, validatePushSubscription, type PushConfig, type PushSend } from '../src/push.ts';
 
 const NOW = Date.parse('2026-09-07T12:00:00Z');
 function config(): PushConfig { const keys = webPush.generateVAPIDKeys(); return { ...baseConfig(), VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: 'mailto:notifications@example.test' }; }
@@ -53,9 +53,9 @@ test('encrypted transport pins a public DNS answer, keeps TLS hostname, sets exp
     req.end = body => { sentBody = body; callback({ statusCode: 307, headers: { location: 'https://127.0.0.1/private', 'retry-after': '120' }, destroy() {} }); }; return req;
   }) as unknown as typeof HttpsRequest;
   const send = createPushSender(config(), { resolve: async () => ({ hostname: 'web.push.apple.com', address: '17.0.0.1', family: 4 }), request });
-  const result = await send(subscription(), JSON.stringify(REVIEW_PUSH_PAYLOAD), new AbortController().signal);
+  const result = await send(subscription(), JSON.stringify(CALENDAR_PUSH_PAYLOAD), new AbortController().signal);
   assert.equal(calls, 1); assert.equal(result.statusCode, 307); assert.equal(result.retryAfterMs, 120_000); assert.equal(requestOptions.hostname, '17.0.0.1'); assert.equal(requestOptions.servername, 'web.push.apple.com'); assert.equal(requestOptions.agent, false);
-  const headers = requestOptions.headers as Record<string, unknown>; assert.equal(String(headers.TTL), '3600'); assert.equal(headers.Urgency, 'low'); assert.equal(headers.Topic, 'calendar-review'); assert.match(String(headers.Authorization), /^vapid /); assert.equal(headers['Content-Encoding'], 'aes128gcm'); assert.equal(sentBody!.includes(Buffer.from(REVIEW_PUSH_PAYLOAD.body)), false);
+  const headers = requestOptions.headers as Record<string, unknown>; assert.equal(String(headers.TTL), '3600'); assert.equal(headers.Urgency, 'low'); assert.equal(headers.Topic, 'calendar-updates'); assert.match(String(headers.Authorization), /^vapid /); assert.equal(headers['Content-Encoding'], 'aes128gcm'); assert.equal(sentBody!.includes(Buffer.from(CALENDAR_PUSH_PAYLOAD.body)), false);
 });
 test('absolute delivery timeout includes DNS lookup and shutdown cancels unresolved delivery', async () => {
   const keepAlive = setTimeout(() => {}, 1000);
@@ -76,7 +76,7 @@ test('opt-in baselines existing items, batches new proposals and discloses no ev
     const status = f.worker.subscribe(sub); assert.equal(status.subscriptionCount, 1); assert.deepEqual(status.subscriptionIds, [hash(sub.endpoint)]); assert.equal(JSON.stringify(status).includes(sub.endpoint), false); assert.equal(JSON.stringify(status).includes(sub.keys.auth), false);
     await f.settled(); assert.equal(f.calls.length, 0);
     addProposal(f.store, 'new-a'); addProposal(f.store, 'new-b'); await f.worker.tick(); assert.equal(f.worker.status().delivery.state, 'settling'); assert.equal(f.calls.length, 0);
-    f.advance(); await f.worker.tick(); assert.equal(f.calls.length, 1); assert.deepEqual(JSON.parse(f.calls[0]!.payload), REVIEW_PUSH_PAYLOAD); assert.equal(f.calls[0]!.payload.includes(old.event.title), false);
+    f.advance(); await f.worker.tick(); assert.equal(f.calls.length, 1); assert.deepEqual(JSON.parse(f.calls[0]!.payload), CALENDAR_PUSH_PAYLOAD); assert.equal(f.calls[0]!.payload.includes(old.event.title), false);
     for (let n = 0; n < 5; n++) { f.advance(); await f.worker.tick(); } assert.equal(f.calls.length, 1);
     const records = f.store.db.prepare("SELECT payload FROM records WHERE bucket LIKE 'push_%'").all() as { payload: string }[];
     assert.ok(records.length > 0); assert.ok(records.every(row => !row.payload.includes(sub.endpoint) && !row.payload.includes(sub.keys.auth)));
@@ -90,6 +90,35 @@ test('opting in during an import baselines the active batch, then alerts for the
     f.store.remove('scan'); f.store.capture(source()); addProposal(f.store, 'during-processing'); await f.settled(); assert.equal(f.calls.length, 0);
     f.store.sourceStatus('m1', 'processed'); await f.settled(); assert.equal(f.calls.length, 0);
     addProposal(f.store, 'later-mail'); await f.settled(); assert.equal(f.calls.length, 1);
+  } finally { await f.close(); }
+});
+test('automatic additions still generate one generic alert after they leave the pending inbox', async () => {
+  const f = fixture();
+  try {
+    f.worker.subscribe(subscription());
+    for (const outcome of ['created', 'updated', 'cancelled'] as const) {
+      const item = addProposal(f.store, `auto-${outcome}`);
+      f.store.put('proposals', item.id, { ...item, status: 'confirmed', appliedBy: 'automatic', outcome });
+    }
+    await f.settled();
+    assert.equal(f.calls.length, 1);
+    assert.deepEqual(JSON.parse(f.calls[0]!.payload), CALENDAR_PUSH_PAYLOAD);
+    assert.equal(JSON.parse(f.calls[0]!.payload).url, '/calendar');
+    f.advance(); await f.worker.tick(); assert.equal(f.calls.length, 1);
+  } finally { await f.close(); }
+});
+test('owner actions, duplicate matches and suppressed items do not create update alerts', async () => {
+  const f = fixture();
+  try {
+    f.worker.subscribe(subscription());
+    for (const [appliedBy, outcome] of [['owner', 'created'], ['automatic', 'duplicate'], ['automatic', 'suppressed']] as const) {
+      const item = addProposal(f.store, `${appliedBy}-${outcome}`);
+      f.store.put('proposals', item.id, { ...item, status: 'confirmed', appliedBy, outcome });
+    }
+    await f.settled(); assert.equal(f.calls.length, 0);
+    const item = addProposal(f.store, 'genuine-auto-addition');
+    f.store.put('proposals', item.id, { ...item, status: 'confirmed', appliedBy: 'automatic', outcome: 'created' });
+    await f.settled(); assert.equal(f.calls.length, 1);
   } finally { await f.close(); }
 });
 test('new work waits for active processing and retriable captured sources before grouping', async () => {

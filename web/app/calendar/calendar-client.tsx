@@ -4,6 +4,7 @@ import { api } from '@/lib/client-api';
 import { createRefreshQueue } from '@/lib/refresh-queue';
 import { stopDeviceNotifications } from '@/lib/push-client';
 import DeliverySettings from './delivery-settings';
+import { AttendanceBadge, attendanceSummary, effectiveReminder, eventAttendance, eventDisplayTitle, proposalFields, visibleEvents } from './attendance';
 
 import {
   useCallback,
@@ -108,10 +109,11 @@ const blank = (date: string): EventFields => ({
   kind: 'social',
   location: '',
   detail: '',
+  attendance: 'confirmed',
 });
 
 
-function EventForm({
+export function EventForm({
   initial,
   onSave,
   busy,
@@ -122,7 +124,7 @@ function EventForm({
   busy: boolean;
   label: string;
 }) {
-  const [fields, setFields] = useState(initial);
+  const [fields, setFields] = useState({ ...initial, attendance: eventAttendance(initial) });
   const formId = useId();
   const change = (key: keyof EventFields, value: string) =>
     setFields((previous) => ({ ...previous, [key]: value }));
@@ -143,6 +145,20 @@ function EventForm({
           maxLength={200}
         />
       </label>
+      <fieldset className="attendance-choice">
+        <legend>Are you going?</legend>
+        <div>
+          <label className={`attendance-option ${fields.attendance === 'confirmed' ? 'is-active' : ''}`}>
+            <input type="radio" name={`${formId}-attendance`} value="confirmed" checked={fields.attendance === 'confirmed'} onChange={() => setFields(previous => ({ ...previous, attendance: 'confirmed' }))} />
+            I’m going
+          </label>
+          <label className={`attendance-option ${fields.attendance === 'invited' ? 'is-active' : ''}`}>
+            <input type="radio" name={`${formId}-attendance`} value="invited" checked={fields.attendance === 'invited'} onChange={() => setFields(previous => ({ ...previous, attendance: 'invited' }))} />
+            Invited
+          </label>
+        </div>
+        <p>This only changes your calendar. No RSVP is sent.</p>
+      </fieldset>
       <div className="form-pair">
         <label className="field-label" htmlFor={`${formId}-date`}>
           {' '}
@@ -270,10 +286,10 @@ function EventForm({
         </label>
       </details>
       {fields.time && <label className="field-label" htmlFor={`${formId}-reminder`}>Calendar reminder
-        <select id={`${formId}-reminder`} value={fields.reminderMinutes === null ? 'off' : String(fields.reminderMinutes ?? 15)} onChange={event => setFields(previous => ({ ...previous, reminderMinutes: event.target.value === 'off' ? null : Number(event.target.value) }))}>
+        <select id={`${formId}-reminder`} disabled={fields.attendance === 'invited'} value={effectiveReminder(fields) === null ? 'off' : String(effectiveReminder(fields))} onChange={event => setFields(previous => ({ ...previous, reminderMinutes: event.target.value === 'off' ? null : Number(event.target.value) }))}>
           <option value="off">None</option><option value="0">At the time</option><option value="5">5 minutes before</option><option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option>
           {fields.reminderMinutes != null && ![0,5,15,30,60,1440].includes(fields.reminderMinutes) && <option value={fields.reminderMinutes}>{fields.reminderMinutes} minutes before</option>}
-        </select><small>Included in your private Calendar subscription. Enable its alerts on your device.</small>
+        </select><small>{fields.attendance === 'invited' ? 'Invitations have no reminders. Mark this plan as “I’m going” to set one.' : 'Included in your Calendar subscription. Enable its alerts on your device.'}</small>
       </label>}
       <p className="form-help">
         Leave unknown times blank. Nothing is sent to the organiser.
@@ -324,6 +340,7 @@ export default function CalendarClient() {
   const [active, setActive] = useState<CalendarEvent | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [peek, setPeek] = useState(true);
+  const [showInvitations, setShowInvitations] = useState(true);
   const closeRef = useRef<HTMLButtonElement>(null);
   const reopenRef = useRef<HTMLButtonElement>(null);
   const requestNumber = useRef(0);
@@ -482,6 +499,7 @@ export default function CalendarClient() {
         'location',
         'detail',
         'reminderMinutes',
+        'attendance',
         ...optional,
       ];
       const creating = modal === 'add';
@@ -510,7 +528,19 @@ export default function CalendarClient() {
       else await api('events', 'POST', clean);
       if (fields.date) choose(fields.date);
       setModal(null);
-      setNotice('Plan saved to your calendar.');
+      setNotice(eventAttendance(fields) === 'invited' ? 'Invitation saved to your calendar.' : 'Plan saved to your calendar.');
+    });
+  }
+  async function changeAttendance() {
+    if (!active) return;
+    const attendance = eventAttendance(active) === 'invited' ? 'confirmed' : 'invited';
+    await act(async () => {
+      const result = await api<{ event: CalendarEvent }>(`events/${active.id}`, 'PATCH', {
+        event: { attendance },
+        expectedRevision: active.revision,
+      });
+      setActive(result.event);
+      setNotice(attendance === 'confirmed' ? 'Marked as going. No RSVP sent.' : 'Marked as an invitation. No RSVP sent.');
     });
   }
   function connect() {
@@ -519,8 +549,10 @@ export default function CalendarClient() {
       window.location.assign(result.url);
     });
   }
-  const events = data?.events || [];
+  const allEvents = data?.events || [];
+  const events = visibleEvents(allEvents, showInvitations);
   const proposals = data?.proposals || [];
+  const fieldsForProposal = (item: Proposal) => proposalFields(item, allEvents.find(event => event.id === item.targetEventId));
   const connection = data?.connection;
   const entries = onDate(events, selected);
   const first = new Date(view.year, view.month, 1);
@@ -547,13 +579,13 @@ export default function CalendarClient() {
     modal === 'connections'
       ? 'Your connections'
       : modal === 'review'
-        ? 'A few things to look at'
+        ? 'Needs details'
         : modal === 'proposal'
           ? proposal?.action === 'update'
-            ? 'Review this change'
+            ? 'Check this change'
             : proposal?.action === 'cancel'
-              ? 'Review this cancellation'
-              : 'Make it a plan'
+              ? 'Check this cancellation'
+              : 'Complete the details'
           : modal === 'add'
             ? 'Add a plan'
             : modal === 'edit'
@@ -562,7 +594,7 @@ export default function CalendarClient() {
                 ? 'Remove this plan?'
                 : modal === 'disconnect'
                   ? 'Disconnect Gmail?'
-                  : active?.title || 'Your plan';
+                  : active ? eventDisplayTitle(active) : 'Your plan';
   return (
     <div className="personal-viewport">
       <main className="calendar-app theme-edge round-two personal-calendar">
@@ -576,7 +608,7 @@ export default function CalendarClient() {
             </span>
             <button
               onClick={() => setModal('review')}
-              aria-label={`Review ${proposals.length} suggestions`}
+              aria-label={`Needs details, ${proposals.length} ${proposals.length === 1 ? 'item' : 'items'}`}
             >
               <Inbox size={20} />
               {proposals.length > 0 && <small>{proposals.length}</small>}
@@ -606,10 +638,10 @@ export default function CalendarClient() {
                   variant="ghost"
                   className="quiet-action"
                   onClick={() => setModal('review')}
-                  aria-label={`Review ${proposals.length} suggestions`}
+                  aria-label={`Needs details, ${proposals.length} ${proposals.length === 1 ? 'item' : 'items'}`}
                 >
                   <Inbox size={17} />
-                  <span>Review</span>
+                  <span>Needs details</span>
                   {proposals.length > 0 && (
                     <b className="personal-count">{proposals.length}</b>
                   )}
@@ -635,7 +667,7 @@ export default function CalendarClient() {
                   {monthNames[view.month]}
                   <span>{view.year}</span>
                 </h1>
-                <span className="r2-month-meta">Your plans, in one place.</span>
+                <span className="r2-month-meta">Bookings and invitations, brought together.</span>
               </div>
               <div className="month-navigation">
                 <Button
@@ -672,6 +704,12 @@ export default function CalendarClient() {
                   Add event
                 </Button>
               </div>
+            </div>
+            <div className="calendar-filter-row">
+              <button type="button" className="invitation-filter" aria-pressed={showInvitations} onClick={() => setShowInvitations(value => !value)}>
+                <span className="filter-check" aria-hidden="true">{showInvitations && <Check size={12} />}</span>
+                Show invitations
+              </button>
             </div>
             {error && (
               <div className="personal-banner" role="alert">
@@ -725,7 +763,7 @@ export default function CalendarClient() {
                       <button
                         key={date}
                         className={`day-cell ${date === selected ? 'is-selected' : ''} ${date === today ? 'is-today' : ''} ${day.getMonth() !== view.month ? 'is-other' : ''} ${index % 7 >= 5 ? 'is-weekend' : ''}`}
-                        aria-label={`${dateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' })}, ${items.length} plans`}
+                        aria-label={`${dateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' })}, ${attendanceSummary(items)}`}
                         aria-pressed={selected === date}
                         onClick={() => choose(date)}
                       >
@@ -734,7 +772,8 @@ export default function CalendarClient() {
                           {items.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
-                              className={`calendar-event kind-${event.kind} ${event.kind === 'stay' ? 'is-stay' : ''}`}
+                              className={`calendar-event ${event.kind === 'stay' ? 'is-stay' : ''}`}
+                              title={eventDisplayTitle(event)}
                             >
                               <span className="event-dot" />
                               <span className="event-time">
@@ -745,12 +784,11 @@ export default function CalendarClient() {
                                   : event.time}
                               </span>
                               <span className="event-full">
-                                {event.kind === 'stay' && event.endDate === date
-                                  ? 'Checkout · '
-                                  : ''}
-                                {event.title}
+                                {eventDisplayTitle(event.kind === 'stay' && event.endDate === date
+                                  ? { ...event, title: `Checkout · ${event.title}` }
+                                  : event)}
                               </span>
-                              <span className="event-short">{event.title}</span>
+                              <span className="event-short">{eventDisplayTitle(event)}</span>
                             </div>
                           ))}
                           {items.length > 2 && (
@@ -761,8 +799,8 @@ export default function CalendarClient() {
                         </div>
                         <span className="mobile-event-count">
                           {items.length > 1
-                            ? `${items.length} plans`
-                            : items[0]?.title || ''}
+                            ? attendanceSummary(items)
+                            : items[0] ? eventDisplayTitle(items[0]) : ''}
                         </span>
                       </button>
                     );
@@ -803,7 +841,8 @@ export default function CalendarClient() {
                               <span className="detail-time">
                                 {timeOnDay(event, selected)}
                               </span>
-                              <strong>{event.title}</strong>
+                              <strong>{eventDisplayTitle(event)}</strong>
+                              <AttendanceBadge event={event} />
                               <span className="detail-location">
                                 {event.location || 'Location not supplied'}
                               </span>
@@ -814,7 +853,9 @@ export default function CalendarClient() {
                       ) : (
                         <div className="personal-empty-day">
                           <p>
-                            {data
+                            {data && !showInvitations && onDate(allEvents, selected).length > 0
+                              ? 'Invitations are hidden.'
+                              : data
                               ? 'A little breathing room.'
                               : 'Your plans will appear here.'}
                           </p>
@@ -844,7 +885,7 @@ export default function CalendarClient() {
                       month: 'short',
                     })}
                   </span>
-                  <b>{entries.length} plans</b>
+                  <b>{attendanceSummary(entries)}</b>
                   <ArrowUpRight size={16} />
                 </button>
               )}
@@ -863,7 +904,7 @@ export default function CalendarClient() {
                 )}
                 {processing ? 'Checking your plans…' : lastChecked}
               </button>
-              <span>Only plans you’ve confirmed</span>
+              <span>Added automatically. Always yours to edit.</span>
             </footer>
           </div>
         </div>
@@ -884,7 +925,7 @@ export default function CalendarClient() {
             {modal === 'connections'
               ? 'Less entering. More looking forward.'
               : modal === 'review' || modal === 'proposal'
-                ? 'You decide what becomes a plan.'
+                ? 'Plans are added automatically. These items need a little more information.'
                 : modal === 'disconnect'
                   ? 'Saved plans remain in your calendar. New email checks will stop.'
                   : modal === 'delete'
@@ -900,7 +941,7 @@ export default function CalendarClient() {
             <div className="personal-inline-error" role="alert">
               <p>{actionError}</p>
               {actionErrorCode === 'revision_conflict' &&
-                (modal === 'edit' || modal === 'delete') && (
+                (modal === 'edit' || modal === 'delete' || modal === 'event') && (
                   <button
                     className="error-recovery"
                     onClick={() => void reloadLatest()}
@@ -918,7 +959,7 @@ export default function CalendarClient() {
                       void refresh();
                     }}
                   >
-                    Return to review
+                    Return to Needs details
                   </button>
                 )}
             </div>
@@ -957,8 +998,10 @@ export default function CalendarClient() {
                 </span>
               </div>
               <p className="connection-explainer">
-                Read-only access to find personal plans and dated bookings. New
-                suggestions wait for your review.
+                Read-only access to find personal plans and dated bookings. Clear
+                bookings and invitations are added automatically. Invitations
+                start with “INVITATION: ”. Missing or conflicting
+                details appear in Needs details.
               </p>
               <p className="connection-explainer">
                 Relevant email text is interpreted by Gemini through OpenRouter.{' '}
@@ -1064,7 +1107,7 @@ export default function CalendarClient() {
                         void act(async () => {
                           await api('gmail/sync', 'POST', {});
                           setNotice(
-                            'Checking Gmail. Suggestions will appear in Review.',
+                            'Checking Gmail. New plans will appear automatically.',
                           );
                         })
                       }
@@ -1096,10 +1139,11 @@ export default function CalendarClient() {
                 )}
               </div>
               <p className="connection-small">
-                Gmail access cannot send, delete, or edit your email. Confirming
-                a plan does not send an RSVP.
+                Gmail access cannot send, delete, or edit your email. Matching
+                booking changes and cancellations update your calendar automatically.
+                Changing your attendance never sends an RSVP.
               </p>
-              <DeliverySettings events={events} onEdit={event => { setActive(event); setModal('edit'); }} />
+              <DeliverySettings events={allEvents} onEdit={event => { setActive(event); setModal('edit'); }} />
             </div>
           )}
           {modal === 'review' && (
@@ -1111,16 +1155,14 @@ export default function CalendarClient() {
                       <span className="source-tag">Gmail</span>
                       <span>
                         {item.action === 'cancel'
-                          ? 'Cancellation to review'
+                          ? 'Cancellation needs checking'
                           : item.action === 'update'
-                            ? 'Booking changed'
-                            : item.attendance === 'invited' ||
-                                item.attendance === 'unknown'
-                              ? 'Are you going?'
-                              : 'Ready to review'}
+                            ? 'Change needs checking'
+                            : 'Missing details'}
                       </span>
                     </div>
-                    <h3>{item.event.title}</h3>
+                    <h3>{eventDisplayTitle(fieldsForProposal(item))}</h3>
+                    {item.action !== 'cancel' && <AttendanceBadge event={fieldsForProposal(item)} />}
                     <p className="suggestion-date">{eventWhen(item.event)}</p>
                     <p className="proposal-reason">{item.reason}</p>
                     <details>
@@ -1144,8 +1186,8 @@ export default function CalendarClient() {
                         }}
                       >
                         {item.action === 'cancel'
-                          ? 'Review cancellation'
-                          : 'Review details'}
+                          ? 'Check cancellation'
+                          : 'Complete details'}
                         <ArrowUpRight size={15} />
                       </Button>
                       <Button
@@ -1159,7 +1201,7 @@ export default function CalendarClient() {
                               'POST',
                               {},
                             );
-                            setNotice('Suggestion dismissed.');
+                            setNotice('Item dismissed.');
                           })
                         }
                       >
@@ -1171,13 +1213,13 @@ export default function CalendarClient() {
               ) : (
                 <div className="review-empty">
                   {!data && !error ? <Loader2 className="spinning" size={30} /> : <Check size={30} />}
-                  <h3>{!data ? error ? 'Suggestions unavailable.' : 'Loading suggestions…' : 'Nothing waiting on you.'}</h3>
+                  <h3>{!data ? error ? 'Details unavailable.' : 'Loading items…' : 'Nothing waiting on you.'}</h3>
                   <p>
                     {!connection
-                      ? error ? 'Try loading your calendar again to see your suggestions.' : 'Your saved suggestions will appear here.'
+                      ? error ? 'Try loading your calendar again to see what needs attention.' : 'Items needing your help will appear here.'
                       : connected
-                      ? 'New suggestions will appear after Gmail is checked.'
-                      : 'Connect Gmail to bring your bookings into review.'}
+                      ? 'Bookings and invitations appear automatically in your calendar. Only missing or conflicting details need your help.'
+                      : 'Connect Gmail to bring bookings and invitations into your calendar.'}
                   </p>
                   {data && !connected && (
                     <Button
@@ -1202,7 +1244,7 @@ export default function CalendarClient() {
               </details>
               {proposal.action !== 'create' && (!proposal.targetEventId || proposal.targetRevision === undefined) ? (
                 <div className="cancel-review">
-                  <h3>{proposal.event.title}</h3>
+                  <h3>{eventDisplayTitle(fieldsForProposal(proposal))}</h3>
                   <p>{eventWhen(proposal.event)}</p>
                   <p>
                     We couldn’t match this {proposal.action === 'cancel' ? 'cancellation' : 'change'} to a saved plan.
@@ -1214,7 +1256,7 @@ export default function CalendarClient() {
                   </p>
                   <div className="personal-actions">
                     <Button className="primary-action" onClick={() => setModal('review')} disabled={busy}>
-                      Back to review
+                      Back to Needs details
                     </Button>
                     <Button variant="ghost" className="quiet-action" disabled={busy} onClick={() => void act(async () => {
                       await api(`proposals/${proposal.id}/dismiss`, 'POST', {});
@@ -1227,7 +1269,7 @@ export default function CalendarClient() {
                 </div>
               ) : proposal.action === 'cancel' ? (
                 <div className="cancel-review">
-                  <h3>{proposal.event.title}</h3>
+                  <h3>{eventDisplayTitle(fieldsForProposal(proposal))}</h3>
                   <p>{eventWhen(proposal.event)}</p>
                   <p>
                     Remove this saved plan after reviewing the cancellation.
@@ -1252,17 +1294,10 @@ export default function CalendarClient() {
               ) : (
                 <EventForm
                   key={proposal.id}
-                  initial={proposal.event}
+                  initial={fieldsForProposal(proposal)}
                   busy={busy}
                   onSave={saveEvent}
-                  label={
-                    proposal.action === 'update'
-                      ? 'Save this change'
-                      : proposal.attendance === 'invited' ||
-                          proposal.attendance === 'unknown'
-                        ? 'I’m going — add to calendar'
-                        : 'Add to calendar'
-                  }
+                  label="Save details"
                 />
               )}
             </>
@@ -1286,6 +1321,14 @@ export default function CalendarClient() {
           )}
           {modal === 'event' && active && (
             <div className="booking-details">
+              <div className="booking-attendance">
+                <AttendanceBadge event={active} />
+                <Button variant="ghost" className="quiet-action" disabled={busy} onClick={() => void changeAttendance()}>
+                  {busy ? <Loader2 className="spinning" size={14} /> : null}
+                  {eventAttendance(active) === 'invited' ? 'I’m going' : 'Mark as invitation'}
+                </Button>
+              </div>
+              <p className="booking-attendance-help">{eventAttendance(active) === 'invited' ? 'An invitation, with no reminder until you’re going.' : 'A confirmed plan.'} Changing this status sends no RSVP.</p>
               <p className="booking-when">{eventWhen(active)}</p>
               {(active.endTime || active.endTimeZone) && (
                 <p className="booking-when">
@@ -1323,6 +1366,7 @@ export default function CalendarClient() {
               <div className="personal-actions">
                 <Button
                   className="primary-action"
+                  disabled={busy}
                   onClick={() => setModal('edit')}
                 >
                   Edit plan
@@ -1330,6 +1374,7 @@ export default function CalendarClient() {
                 <Button
                   variant="ghost"
                   className="quiet-action"
+                  disabled={busy}
                   onClick={() => setModal('delete')}
                 >
                   Remove
@@ -1342,7 +1387,7 @@ export default function CalendarClient() {
           )}
           {modal === 'delete' && active && (
             <div className="cancel-review">
-              <h3>{active.title}</h3>
+              <h3>{eventDisplayTitle(active)}</h3>
               <p>{eventWhen(active)}</p>
               <div className="personal-actions">
                 <Button

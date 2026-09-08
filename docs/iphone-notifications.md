@@ -2,6 +2,10 @@
 
 Researched against current Apple and WebKit guidance on 7 September 2026. The calendar feed, installable app and opt-in review-alert infrastructure are now implemented; see [calendar delivery](calendar-delivery.md). No physical iPhone notification delivery, subscription refresh or alarm behaviour has yet been verified.
 
+## Current product update — 8 September 2026
+
+Rory now wants automatic entry with `INVITATION: …` labels in one calendar, using the existing subscription. Invitations are tentative/free and have no alarms. The colour-coded, separate-subscription idea was superseded. Optional alerts now concern calendar updates and missing details; the device checks below still apply, with tap-through to the calendar.
+
 ## Objective
 
 Let the owner notice new items requiring review and receive useful reminders for confirmed plans, while preserving the quiet Edge experience. While the owner is away, the implemented default is opt-in grouped review alerts plus confirmed-event alarms through the private subscription. Neither is enabled without the owner's action; the preference can still be adjusted.

@@ -1,14 +1,14 @@
 # Personal calendar — milestones
 
-Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 117 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in review alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Real suggestions are available in Review.
+Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 47 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; deploying this update and applying eligible existing pending items remain open.
 
 ## Objective
 
-Build a beautiful personal calendar that turns forwarded WhatsApp messages and Gmail into reviewed commitments and dated bookings, with confirmed events available in the iPhone Calendar app. Reduce manual entry, keep uncertain attendance explicit, and produce something Rory enjoys using and sharing.
+Build a beautiful personal calendar that turns forwarded WhatsApp messages and Gmail into automatic calendar entries, with invitations explicitly labelled INVITATION: in the same web and iPhone calendars. Reduce manual entry, keep uncertain attendance explicit, and produce something Rory enjoys using and sharing.
 
-## Current sequence — iPhone delivery and reliability while Rory is away
+## Current sequence — automatic entry and labelled invitations
 
-The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has authorized continued milestone work while away. The official WhatsApp receiver is deployed disabled; its real test awaits Meta account access and must fit the no-extra-owned-number constraint. The private ICS feed, installable app and opt-in review alerts are implemented. Device delivery and real-mail quality acceptance remain open. Continue reliability and fictional evaluation work without confirming personal suggestions or changing real bookings.
+The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has authorized continued milestone work while away. The official WhatsApp receiver is deployed disabled; its real test awaits Meta account access and must fit the no-extra-owned-number constraint. The private ICS feed, installable app and opt-in grouped alerts are implemented. Device delivery and real-mail quality acceptance remain open. Rory’s 8 September instruction authorizes automatic addition, including eligible existing pending items. Missing or conflicting facts still require input. This supersedes the earlier restriction against applying real suggestions; preserve owner edits, explicit dismissals/deletions, credentials and subscription preferences.
 
 - [x] Build and review visual alternatives; select Edge as the working direction.
 - [x] Implement the Edge personal app, encrypted persistent calendar/review data, and owner-restricted API bridge; preserve the original ten design studies.
@@ -17,7 +17,7 @@ The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has 
 - [x] Finish the private remote deployment and verify the hosted API/access flow, trusted TLS, and database persistence through restart.
 - [x] Configure Google project, read-only scope, OAuth redirects, public app information, and Production status; reach the Google consent flow from the hosted app.
 - [x] Complete account-holder consent and verify the connected Gmail profile.
-- [x] Capture and interpret real emails, produce dated suggestions for review, and recover the saved import from Gmail rate limiting with paced reads.
+- [x] Capture and interpret real emails under the original review-first policy, and recover the saved import from Gmail rate limiting with paced reads. Milestone 4b supersedes that policy.
 - [x] Add and test automatic saved-import continuation, queued manual checks, and cancellation of provider waits on disconnect.
 - [x] Finish the initial import; verify the saved history checkpoint, no active import scan, and successful scheduled capture with the next check one hour later.
 - [ ] Complete real-mail accuracy acceptance; failed interpretations are retained for retry.
@@ -43,9 +43,10 @@ Rory directs the design with Codex implementing it. Edge is the current visual r
 | --- | --- | --- |
 | 1. Prove WhatsApp forwarding | Evidence that the official receiver works, or a clear setup limitation | Meta account access and a test receiver |
 | 2. Build the calendar foundation | Designed calendar and review interface with working manual events | Shared data format; design and backend can proceed alongside milestone 1 |
-| 3. Connect iPhone Calendar | Confirmed events available through a private subscription, with reminder behaviour verified | Milestone 2 and an HTTPS endpoint |
-| 4. Capture Gmail bookings | Hourly email → review → calendar; iPhone integration required for the full daily-use result | Milestone 2 and Gmail/model setup; milestone 3 can follow initial Gmail use |
-| 5. Complete WhatsApp capture | Forward → interpret → confirm in WhatsApp or the app → calendar | Milestones 1–4 |
+| 3. Connect iPhone Calendar | Confirmed plans and labelled invitations in one private subscription, with device behaviour verified | Milestone 2 and an HTTPS endpoint |
+| 4. Capture Gmail bookings | Hourly email → automatic calendar entry; Needs details for factual exceptions | Milestone 2 and Gmail/model setup; milestone 3 can follow initial Gmail use |
+| 4b. Automatic entry and invitation labels | Valid plans appear directly, with exactly one `INVITATION: ` prefix for invitations in the existing calendar | Milestone 4; backed-up existing-pending migration and deployment |
+| 5. Complete WhatsApp capture | Forward → interpret → calendar, with Needs details for exceptions | Milestones 1–4 |
 | 6. Prove everyday reliability | Private version that survives failures and is useful in daily use | Milestones 3–5 |
 | 7. Publish the showcase | Polished public demo with fictional data | Stable interface and isolation verified; personal-use feedback informs polish |
 
@@ -68,13 +69,13 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 **Done when:** A real forward reaches the official webhook and the ongoing-use path fits the no-extra-owned-number constraint, or a clear incompatibility is recorded for a product decision. If this cannot be demonstrated, leave the milestone incomplete with a clear finding; do not substitute Baileys or a personal-account scraping connection.
 
-**Design handoff:** Rory and Codex refine the actual capture states: received, processing, needs clarification, ready to review, and failed.
+**Design handoff:** Rory and Codex refine the actual capture states: received, processing, added to calendar, needs details, and failed. The receiving spike itself stops at durable capture.
 
 ## Milestone 2 — Build the calendar foundation and design handoff
 
 **Owners:** Rory + Codex for design; Codex for the application foundation and functional wiring.
 
-**Status:** Local implementation, API checks and hosted owner access pass. Interaction acceptance and Rory's review of the functional app remain pending.
+**Status:** Local implementation, API checks and hosted owner access pass. The original confirmation controls now support factual exceptions under milestone 4b; valid items no longer require review. Interaction acceptance and Rory's review of the functional app remain pending.
 
 ### Codex: make the interface independent of live integrations
 
@@ -98,27 +99,27 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [x] Connect the Edge components to the calendar service and real API actions while preserving the visual treatment.
 - [ ] Rory reviews the result for design consistency; Rory and Codex refine the interface together.
 
-**Done when:** Rory can create and manage manual events in the hosted app, review proposals, and see only confirmed items on the calendar. Date-only bookings and multi-day stays display without invented times. The original fictional studies remain available for further design comparison.
+**Done when:** Rory can manage manual events and automatically captured plans in one calendar, with INVITATION: labels and a Needs details exception flow. Date-only bookings and multi-day stays display without invented times. The original fictional studies remain available for further design comparison.
 
 ## Milestone 3 — Make it usable through iPhone Calendar
 
 **Owner:** Codex; Rory verifies the subscription on the actual iPhone. Rory and Codex refine the subscription/settings presentation.
 
-**Status:** Private ICS subscriptions, per-event reminder settings, Home Screen manifest/icons and opt-in grouped review alerts are implemented. Synthetic tests and the browser subscription-control flow pass. Both features remain off until the owner enables them. Physical iPhone push delivery and Calendar refresh/alarms are unverified. See [delivery implementation](docs/calendar-delivery.md) and [iPhone findings](docs/iphone-notifications.md).
+**Status:** One private ICS subscription, per-event reminder settings, Home Screen manifest/icons and opt-in grouped alerts are implemented. Synthetic tests and the browser subscription-control flow pass. Both features remain off until the owner enables them. Physical iPhone push delivery and Calendar refresh/alarms are unverified. See [delivery implementation](docs/calendar-delivery.md) and [iPhone findings](docs/iphone-notifications.md).
 
 - [x] Establish an isolated HTTPS calendar service on Hetzner and verify access/capacity. The token-protected feed endpoint is now implemented.
-- [x] Publish confirmed events through a read-only ICS feed with stable event identifiers, revision tracking, and correct date/time representation.
+- [x] Implement confirmed plans and invitations in the same read-only ICS feed with stable event identifiers, revision tracking, and correct date/time representation. Use exactly one `INVITATION: ` title prefix and the same calendar colour. Deployment of the invitation update is tracked in milestone 4b.
 - [x] Protect the subscription with an unguessable, revocable token. Explain that possession of the URL grants access to the exported event details; keep source messages and credentials out of the feed.
-- [x] Include per-event alarms, with the planned 15-minute default for timed events and no invented time-based alarms for date-only bookings.
+- [x] Include per-event alarms, with the 15-minute default for confirmed timed events and no time-based alarms for invitations or date-only bookings.
 - [x] Add the subscription instructions and reminder settings to the designed interface.
-- [x] Implement the away-work default: an installable app with optional grouped review alerts and event alarms through the private feed. Permission remains an explicit device action; no duplicate event-reminder pushes. Rory can refine this preference after trying it.
+- [x] Implement the away-work default: an installable app with optional grouped calendar-update/missing-detail alerts and confirmed-event alarms through the private feed. Permission remains an explicit device action; no duplicate event-reminder pushes. Rory can refine this preference after trying it.
 - [ ] Verify installation, permission, locked-phone delivery, tap-through, denial and revocation on the actual iPhone.
 - [ ] Verify a restaurant reservation, overnight flight, hotel stay, and date-only booking on the actual iPhone.
 - [ ] Measure how additions, edits, and cancellations refresh on the device, and verify whether subscribed-calendar alarms behave as intended under Rory's settings.
 
-**Done when:** Confirmed events render correctly on the iPhone, changes and cancellations behave as tested, and reminder behaviour is demonstrated. Record observed refresh delays and settings. Do not promise instant updates or rely on untested alarms; resolve any unreliable behaviour before treating this as the daily reminder mechanism.
+**Done when:** Confirmed plans and labelled invitations render together in the existing iPhone calendar, changes and cancellations behave as tested, and reminder behaviour is demonstrated. Record observed refresh delays and settings. Do not promise instant updates or rely on untested alarms; resolve any unreliable behaviour before treating this as the daily reminder mechanism.
 
-**Usable result:** Confirmed manual and reviewed Gmail events become available through an iPhone subscription, with refresh and reminder behaviour verified on Rory's device.
+**Usable result:** Confirmed plans and labelled invitations become available through one iPhone subscription, with refresh and reminder behaviour verified on Rory's device.
 
 ## Milestone 4 — Capture Gmail commitments and all dated bookings
 
@@ -138,29 +139,45 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [x] Pass the live fictional booking pair with these exact models/settings; record total provider-reported cost **$0.00507645**. This is an API compatibility check, not real-mail quality validation.
 - [x] Implement the configurable **$5 monthly guard**, conservative cost reservations, visible pauses, and retention of captured work; validate the guard in synthetic tests.
 - [x] Implement ordinary single-event calendar attachment parsing and incomplete review items for relevant unsupported attachments; prevent short image adverts from bypassing triage.
-- [x] Keep creates, amendments, and cancellations subject to confirmation, with source evidence and missing details; test idempotency, separate travel legs, and revision protection synthetically.
-- [ ] Verify real hourly capture through review and confirmation, including real confirmations mixed with advertising or labelled Promotions/Updates.
+- [x] Implement the original proposal confirmation flow and its idempotency/revision safeguards. The automatic-entry update below supersedes mandatory approval.
+- [ ] Verify real hourly capture through automatic addition and the missing-detail exception flow, including real confirmations mixed with advertising or labelled Promotions/Updates.
 - [ ] Evaluate social plans and every major booking type, plus invitation/acceptance/refusal, duplicates, receipts, amendments, and cancellations using real or appropriately sanitized examples.
 - [ ] Measure real-mail quality, latency, correction effort, triage misses, and running cost before revisiting models or the budget.
 
-**Done when:** A real booking email reaches the review inbox on the next successful hourly run, confirmation produces one correct calendar event, and that event is included in the iPhone feed. Demonstrate each major booking type plus an advert, ambiguous invitation, acceptance reply, duplicate, amendment, and cancellation. No mandatory details are fabricated and no event is confirmed without Rory's action.
+**Done when:** A real booking email automatically produces one correct calendar entry on the next successful hourly run, and that entry is included in the iPhone feed. Demonstrate each major booking type plus an advert, ambiguous invitation, acceptance reply, duplicate, amendment, and cancellation. No mandatory details are fabricated; unaccepted invitations retain the INVITATION: prefix rather than claiming confirmed attendance.
 
 **Usable result:** The first version that saves daily calendar-entry effort. Begin private use here while WhatsApp is completed.
 
-## Milestone 5 — Complete WhatsApp capture and confirmation
+## Milestone 4b — Automatic entry with invitation labels
+
+**Requested:** 8 September 2026. Rory wants valid items added automatically and invitations labelled `INVITATION: …`, using one calendar and the same colour treatment. The earlier two-colour/two-subscription proposal is superseded.
+
+- [x] Automatically add supported dated bookings and invitations; preserve evidence, idempotency, attendance and owner overrides.
+- [x] Use Needs details only for unresolved factual fields, unsafe matches or conflicts. Absent optional time, location, zone, reference or end date does not by itself block a valid dated item; supplied-but-uncertain values remain exceptions.
+- [x] Prefix invitation display/export titles exactly once with `INVITATION: `; I’m going removes the prefix without sending an RSVP.
+- [x] Keep the existing private feed URL and include both statuses with the same calendar colour; invitations are tentative/free and alarm-free.
+- [x] Adapt optional grouped alerts to calendar updates and missing-detail exceptions; preserve opt-in and quiet hours.
+- [ ] Back up and apply eligible existing pending items without rescanning Gmail or rerunning models.
+- [x] Test the combined lifecycle: 140 backend tests and 47 web tests pass; fictional browser flows for automatic addition, invitation acceptance and missing-detail correction passed. Independent backend regression review found no remaining blocker in its checked scope.
+- [ ] Deploy the automatic-entry update to the backend and Vercel app, then verify the hosted flow.
+- [ ] Verify actual iPhone refresh, labels and invitation/reminder behaviour with Rory.
+
+**Done when:** A new confirmed booking appears directly; an unaccepted invitation appears as INVITATION: … in the web app and existing feed; accepting it removes the prefix with stable identity. Invalid or conflicting facts remain actionable rather than fabricated. Actual iPhone acceptance stays open until observed.
+
+## Milestone 5 — Complete WhatsApp capture
 
 **Owner:** Codex; Rory and Codex refine related app screens and clarification flows.
 
-- [ ] Complete production receiver setup from milestone 1 and restrict capture to Rory's sender identity.
+- [ ] Establish an official receiving route that passed milestone 1 and fits the no-extra-owned-number constraint; restrict capture to Rory's sender identity. Do not assume a Meta test number is permanent, buy another number, migrate the personal account or use Baileys.
 - [ ] Persist messages before acknowledging delivery and process them through a durable queue. Make retries harmless.
-- [ ] Use the same interpretation and proposal logic as Gmail, with explicit forwarded-message provenance.
+- [ ] Use Gmail's automatic-addition and attendance rules with explicit WhatsApp provenance: valid bookings are confirmed, while unaccepted dated invitations use `INVITATION: ` in the same calendar.
 - [ ] Associate related forwards and follow-up context carefully; request clarification when the intended event or original date is unclear.
-- [ ] Offer in-chat confirm/dismiss buttons for suitable proposals, showing enough event detail for an informed decision. Use explicit wording when confirmation also means choosing to attend.
-- [ ] Route incomplete or ambiguous proposals to the web review inbox. Use the same confirmation operation in both places.
-- [ ] Keep acknowledgement and interactive replies within the permitted messaging window. If processing finishes after that window, retain the proposal in the app; do not assume a free-form WhatsApp reply can still be sent.
-- [ ] Handle forwarded changes and cancellations as reviewed updates. Explain that unseen changes in the original chat cannot be detected.
+- [ ] Add eligible forwarded items without a mandatory confirmation step. Calendar attendance controls never send an RSVP.
+- [ ] Route missing or conflicting facts and unsafe matches to the existing Needs details flow; do not invent the original sender or date.
+- [ ] Keep calendar capture independent of outbound WhatsApp messages. No bot replies or in-chat confirmation buttons are required or currently authorized; assess any future messaging separately.
+- [ ] Apply safely matched forwarded changes and cancellations automatically, preserving owner edits. Explain that unseen changes in the original chat cannot be detected.
 
-**Done when:** Rory can forward a message, inspect the proposed details, and confirm one correct event from either WhatsApp or the app. Confirming in both places still produces one event. A forwarded “tomorrow” with no original date needs clarification, and a later change takes effect only after it is forwarded and approved.
+**Done when:** Rory can forward a message to the proven official receiver and see one correct dated booking or labelled invitation appear automatically. Repeated forwards remain idempotent. A forwarded “tomorrow” with no reliable original date needs clarification; later changes take effect only after being forwarded and safely matched. The route needs no extra owned number, mandatory confirmation step or outgoing RSVP.
 
 ## Milestone 6 — Prove everyday reliability
 
@@ -170,27 +187,27 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [x] Verify local API owner/origin checks and manual create/edit/optional-field clearing/stale-409/delete behaviour.
 - [ ] Exercise the deployed service's restart/recovery paths with real integration configuration; test WhatsApp replay once its receiver exists.
 - [ ] Verify accepted input is retained, failed work can retry, and connection or processing problems are visible.
-- [x] Verify synthetically that stale proposals cannot overwrite manual edits and that approved changes/cancellations produce correct feed revisions and alarms; device refresh remains under milestone 3.
+- [x] Verify synthetically that stale proposals cannot overwrite manual edits and that safe automatic changes/cancellations and owner-resolved exceptions produce correct feed revisions and alarms; device refresh remains under milestone 3.
 - [x] Verify encrypted storage, owner/origin access, synthetic retention and redacted errors, feed-token revocation, online backup and isolated integrity/decryption restore checks. One real snapshot was copied off-host and verified without changing the live database.
 - [x] Install and verify daily server backups, including a snapshot while the live database has an active WAL. Scheduled copies are host-only; off-host copying is a separate verified operator step.
 - [ ] Preserve and verify an independent recovery copy of the encryption key and rehearse complete application/provider recovery; isolated database verification alone does not establish this.
 - [ ] Use the app privately for an initial week and record missed relevant items, irrelevant suggestions, correction effort, and measured running cost.
 - [x] Build a labelled set of 50 synthetic examples with an offline validator, field scorer and guarded model runner. Cases cover all major bookings, receipts, adverts, attendance, changes and duplicates; labels and scenario IDs stay out of model input.
 - [x] Measure the 50-case model baseline and inspect every mismatch: 92 calls cost $0.2470869, with no relevant triage misses. Preserve the strict raw score and distinguish label ambiguity from processing failures in [the baseline report](docs/evaluation-baseline-2026-09-07.md). Synthetic coverage does not establish real-mail accuracy.
-- [ ] Fix failures that cause lost messages, duplicate events, invented details, unapproved writes, or misleading reminder behaviour before calling the private version dependable.
-- [x] Keep grouped review push opt-in, baseline existing suggestions, use overnight quiet hours and expose an off switch. Actual review habits and device delivery remain to be evaluated; no event-reminder fallback has been added.
+- [ ] Fix failures that cause lost messages, duplicate events, invented details, incorrect confirmed attendance, unsafe automatic changes, or misleading reminder behaviour before calling the private version dependable.
+- [x] Keep grouped update/missing-detail push opt-in, baseline existing items, use overnight quiet hours and expose an off switch. Actual notification usefulness and device delivery remain to be evaluated; no event-reminder fallback has been added.
 
-**Done when:** The complete capture/review/calendar flow has worked during ordinary use, recovery and restore have been demonstrated, and remaining limitations are documented. Rory can tell when data is stale or action is required.
+**Done when:** The complete capture/automatic-calendar/missing-detail flow has worked during ordinary use, recovery and restore have been demonstrated, and remaining limitations are documented. Rory can tell when data is stale or action is required.
 
 ## Milestone 7 — Polish and publish the fictional demo
 
-**Status:** `/demo` is built with scripted fictional examples and 29 passing web tests. Core browser flows and 390/768/1440 px layouts have been checked. Native date-input/device acceptance and Rory’s design review remain open; see [the demo record](docs/demo-implementation.md).
+**Status:** `/demo` is built with scripted fictional examples. Its original 29-test implementation record and review-first walkthrough are historical; the current project web suite has 47 passing tests. The historical demo flow does not define the private app’s automatic-entry policy. Core browser flows and 390/768/1440 px layouts have been checked. Native date-input/device acceptance and Rory’s design review remain open; see [the demo record](docs/demo-implementation.md).
 
 **Owners:** Rory + Codex for final design and storytelling; Codex for demo wiring, isolation, verification, and deployment preparation.
 
 - [ ] Polish the designed flows using feedback from private use, including mobile behaviour, accessibility, empty states, and motion.
 - [x] Build a separate fictional dataset and demo mode with no live Gmail/WhatsApp connections, personal feed tokens, source messages, or personal records.
-- [x] Demonstrate the story end to end: a message or booking becomes a suggestion, the user reviews it, and it appears on the calendar.
+- [x] Preserve the original scripted demo story: a message becomes a suggestion, the user reviews it, and it appears on the calendar. This is a historical demonstration of the earlier review-first flow, not the current private-app policy.
 - [x] Verify demo isolation with runtime import/capability tests, production connection restrictions, generated-asset secret checks and unauthenticated API rejection. A full browser network recording remains a separate acceptance check.
 - [x] Prepare the public deployment and [a short walkthrough](docs/demo-implementation.md#short-walkthrough) describing scripted examples and deliberate limits. Rory decides when it is ready to share.
 

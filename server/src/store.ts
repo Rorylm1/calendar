@@ -9,6 +9,31 @@ import type { z } from 'zod';
 
 export type SourceStatus = 'fetched' | 'processing' | 'processed' | 'filtered' | 'failed';
 export type EventExportMetadata = { revision: number; createdAt: string; modifiedAt: string };
+type AutomationMetadata = { baseline: Fields; ownerFields: string[]; managed: boolean; identities?: Fields[]; lastSourceAt?: string; sourceThreads?: string[] };
+export type AutoApplySummary = { created: number; updated: number; cancelled: number; duplicate: number; suppressed: number; needsDetails: number };
+const eventFields = ({ id: _id, source: _source, revision: _revision, ...fields }: CalendarEvent): Fields => fields;
+const normalized = (value?: string) => (value || '').replace(/^\s*(?:invitation\s*:\s*)+/i, '').trim().replace(/\s+/g, ' ').toLowerCase();
+function sameBooking(a: Fields, b: Fields, compareTime = true): boolean {
+  if (!a.date || a.date !== b.date || a.kind !== b.kind || (compareTime && a.time !== b.time)) return false;
+  if (a.reference && b.reference && normalized(a.reference) !== normalized(b.reference)) return false;
+  if (a.location && b.location && normalized(a.location) !== normalized(b.location)) return false;
+  if (a.timeZone && b.timeZone && a.timeZone !== b.timeZone) return false;
+  const referenceMatch = a.reference && b.reference && normalized(a.reference) === normalized(b.reference);
+  return normalized(a.title) === normalized(b.title) || Boolean(referenceMatch && normalized(a.location) && normalized(a.location) === normalized(b.location));
+}
+const sameValue = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+function compatibleIdentity(existing: Fields, candidate: Fields): boolean {
+  return ['title', 'date', 'time', 'endDate', 'endTime', 'kind', 'location', 'reference', 'timeZone', 'endTimeZone'].every(key => {
+    const a = existing[key as keyof Fields]; const b = candidate[key as keyof Fields];
+    return !a || !b || normalized(String(a)) === normalized(String(b));
+  });
+}
+// Absent optional facts do not erase previously known booking details.
+function suppliedFields(base: Fields, next: Fields): Fields {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(next)) if (value !== undefined && value !== '' && key !== 'reminderMinutes' && key !== 'attendance') (merged as Record<string, unknown>)[key] = value;
+  return merged;
+}
 export class Store {
   readonly db: DatabaseSync;
   readonly vault: Vault;
@@ -32,8 +57,8 @@ export class Store {
   }
   put(bucket: string, id: string, value: unknown) { this.db.prepare('INSERT INTO records VALUES(?,?,?) ON CONFLICT(bucket,id) DO UPDATE SET payload=excluded.payload').run(bucket, id, this.vault.seal(value, `${bucket}:${id}`)); }
   remove(bucket: string, id = 'default') { this.db.prepare('DELETE FROM records WHERE bucket=? AND id=?').run(bucket, id); }
-  all<T>(bucket: string): T[] { return (this.db.prepare('SELECT id,payload FROM records WHERE bucket=?').all(bucket) as { id: string; payload: string }[]).map(row => this.vault.open<T>(row.payload, `${bucket}:${row.id}`)); }
-  events() { return this.all<CalendarEvent>('events').sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`)); }
+  all<T>(bucket: string): T[] { return (this.db.prepare('SELECT id,payload FROM records WHERE bucket=? ORDER BY rowid').all(bucket) as { id: string; payload: string }[]).map(row => this.vault.open<T>(row.payload, `${bucket}:${row.id}`)); }
+  events() { return this.all<CalendarEvent>('events').map(event => ({ ...event, attendance: event.attendance || 'confirmed' as const })).sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`)); }
   proposals() { return this.all<Proposal>('proposals'); }
   eventExportMetadata(event: CalendarEvent, now = Date.now()): EventExportMetadata {
     const old = this.get<EventExportMetadata>('event_export_metadata', event.id);
@@ -46,26 +71,34 @@ export class Store {
   }
   private saveEvent(event: CalendarEvent) { this.put('events', event.id, event); this.eventExportMetadata(event); }
   createEvent(fields: Fields, source: CalendarEvent['source'] = 'Manual'): CalendarEvent {
-    const write = () => { const event: CalendarEvent = { ...confirmedFields(fields), id: randomUUID(), source, revision: 1 }; this.saveEvent(event); return event; };
+    const write = () => { const event: CalendarEvent = { ...confirmedFields(fields), attendance: fields.attendance || 'confirmed', id: randomUUID(), source, revision: 1 }; this.saveEvent(event); this.put('event_automation', event.id, { baseline: eventFields(event), ownerFields: [], managed: false } satisfies AutomationMetadata); return event; };
     return this.db.isTransaction ? write() : this.transaction(write);
   }
   patchEvent(id: string, patch: z.infer<typeof EventPatch>, revision: number): CalendarEvent {
     return this.transaction(() => { const old = this.requireEvent(id, revision); const { id: _, source, revision: __, ...fields } = old;
-      const event: CalendarEvent = { ...confirmedFields(mergeFields(fields, patch)), id, source, revision: old.revision + 1 }; this.saveEvent(event); return event; });
+      const event: CalendarEvent = { ...confirmedFields(mergeFields(fields, patch)), id, source, revision: old.revision + 1 }; this.saveEvent(event);
+      const metadata = this.get<AutomationMetadata>('event_automation', id) || { baseline: fields, ownerFields: [], managed: false };
+      metadata.ownerFields = [...new Set([...metadata.ownerFields, ...Object.keys(patch).filter(key => key === 'attendance' || !sameValue(fields[key as keyof Fields], event[key as keyof Fields]))])]; this.put('event_automation', id, metadata); return event; });
   }
   deleteEvent(id: string, revision: number) {
-    this.transaction(() => { this.requireEvent(id, revision); this.remove('events', id); this.put('deleted_events', id, { revision: revision + 1, deletedAt: new Date().toISOString() }); });
+    this.transaction(() => { this.removeEvent(this.requireEvent(id, revision)); });
   }
+  private removeEvent(event: CalendarEvent) { this.remove('events', event.id); this.put('deleted_events', event.id, { event, baseline: this.get<AutomationMetadata>('event_automation', event.id)?.baseline, revision: event.revision + 1, deletedAt: new Date().toISOString() }); }
   requireEvent(id: string, revision?: number): CalendarEvent {
     const event = this.get<CalendarEvent>('events', id); if (!event) throw new AppError('not_found', 'This event is no longer available.', 404);
-    if (revision !== undefined && event.revision !== revision) throw new AppError('revision_conflict', 'This event has changed. Refresh and review it again.', 409); return event;
+    if (revision !== undefined && event.revision !== revision) throw new AppError('revision_conflict', 'This event has changed. Refresh and review it again.', 409); return { ...event, attendance: event.attendance || 'confirmed' };
   }
   putProposal(input: Omit<Proposal, 'id' | 'createdAt' | 'revision' | 'status'>): Proposal | undefined {
     const fingerprint = hash(JSON.stringify({ action: input.action, target: input.targetEventId, targetRevision: input.targetRevision, event: input.event, attendance: input.attendance, unresolved: input.unresolvedFields, missingDateSource: input.event.date ? undefined : input.sourceMessageIds }));
     const known = this.db.prepare('SELECT proposal_id FROM fingerprints WHERE fingerprint=?').get(fingerprint) as { proposal_id: string } | undefined;
     if (known) {
       const proposal = this.get<Proposal>('proposals', known.proposal_id);
-      if (proposal) { proposal.sourceMessageIds = [...new Set([...proposal.sourceMessageIds, ...input.sourceMessageIds])]; this.put('proposals', proposal.id, proposal); }
+      if (proposal) {
+        proposal.sourceMessageIds = [...new Set([...proposal.sourceMessageIds, ...input.sourceMessageIds])]; this.put('proposals', proposal.id, proposal);
+        const applied = this.get<{ event: CalendarEvent | null }>('confirm_results', proposal.id)?.event;
+        const current = applied && this.get<CalendarEvent>('events', applied.id); const metadata = current && this.get<AutomationMetadata>('event_automation', current.id);
+        if (proposal.status === 'confirmed' && current && metadata?.managed && compatibleIdentity(current, input.event)) { this.recordSources(metadata, input.sourceMessageIds); this.put('event_automation', current.id, metadata); }
+      }
       return undefined;
     }
     const proposal: Proposal = { ...input, id: randomUUID(), status: 'pending', revision: 1, createdAt: new Date().toISOString() };
@@ -77,18 +110,132 @@ export class Store {
       if (proposal.status === 'confirmed') return this.get<{ proposal: Proposal; event: CalendarEvent | null }>('confirm_results', id)!;
       if (proposal.status !== 'pending') throw new AppError('review_conflict', 'This suggestion was dismissed.', 409);
       let event: CalendarEvent | null = null;
-      if (proposal.action === 'create') { event = this.createEvent(mergeFields(proposal.event, patch), 'Gmail'); }
+      if (proposal.action === 'create') { event = this.createEvent(mergeFields({ ...proposal.event, attendance: proposal.attendance === 'confirmed' ? 'confirmed' : 'invited' }, patch), 'Gmail'); }
       else {
         if (!proposal.targetEventId || proposal.targetRevision === undefined) throw new AppError('review_conflict', 'Choose the existing event before applying this change.', 409);
         const old = this.requireEvent(proposal.targetEventId, proposal.targetRevision);
         if (expectedRevision !== undefined && expectedRevision !== old.revision) throw new AppError('revision_conflict', 'This event has changed. Refresh and review it again.', 409);
-        if (proposal.action === 'cancel') { this.remove('events', old.id); this.put('deleted_events', old.id, { revision: old.revision + 1, deletedAt: new Date().toISOString() }); }
-        else { event = { ...confirmedFields(mergeFields({ ...proposal.event, reminderMinutes: old.reminderMinutes }, patch)), id: old.id, source: old.source, revision: old.revision + 1 }; this.saveEvent(event); }
+        if (proposal.action === 'cancel') this.removeEvent(old);
+        else { event = { ...confirmedFields(mergeFields({ ...suppliedFields(eventFields(old), proposal.event), attendance: old.attendance === 'confirmed' || proposal.attendance === 'confirmed' ? 'confirmed' : 'invited' }, patch)), id: old.id, source: old.source, revision: old.revision + 1 }; this.saveEvent(event); }
       }
-      proposal.status = 'confirmed'; proposal.revision += 1;
-      if (proposal.action !== 'cancel') proposal.attendance = 'confirmed';
-      this.put('proposals', id, proposal); const result = { proposal, event }; this.put('confirm_results', id, result); return result;
+      if (event) {
+        const prior = this.get<AutomationMetadata>('event_automation', event.id);
+        const changed = Object.keys(patch).filter(key => key === 'attendance' || !sameValue(proposal.event[key as keyof Fields], event![key as keyof Fields]));
+        const metadata: AutomationMetadata = { ...prior, baseline: eventFields(event), managed: proposal.action === 'create' || prior?.managed === true, ownerFields: [...new Set([...(prior?.ownerFields || []), ...changed])], identities: [...(prior?.identities || []), eventFields(event)] }; this.recordSources(metadata, proposal.sourceMessageIds); this.put('event_automation', event.id, metadata);
+      }
+      return this.finishProposal(proposal, event, 'owner', proposal.action === 'create' ? 'created' : proposal.action === 'update' ? 'updated' : 'cancelled');
     });
+  }
+  private finishProposal(proposal: Proposal, event: CalendarEvent | null, appliedBy: 'automatic' | 'owner', outcome: NonNullable<Proposal['outcome']>) {
+    proposal.status = outcome === 'suppressed' ? 'dismissed' : 'confirmed'; proposal.revision += 1;
+    proposal.appliedBy = appliedBy; proposal.appliedAt = new Date().toISOString(); proposal.outcome = outcome;
+    this.put('proposals', proposal.id, proposal); const result = { proposal, event }; this.put('confirm_results', proposal.id, result); return result;
+  }
+  private sourceProvenance(ids: string[]) {
+    const sources = ids.flatMap(id => {
+      const row = this.db.prepare('SELECT payload FROM sources WHERE id=?').get(id) as { payload: string | null } | undefined;
+      return row?.payload ? [this.vault.open<SourceMessage>(row.payload, `source:${id}`)] : [];
+    });
+    return { sourceAt: sources.flatMap(source => [source.receivedAt, ...source.context.map(reply => reply.sentAt)]).filter(value => Number.isFinite(Date.parse(value))).map(value => new Date(value).toISOString()).sort().at(-1), sourceThreads: [...new Set(sources.map(source => source.threadId))] };
+  }
+  private recordSources(metadata: AutomationMetadata, ids: string[]) {
+    const { sourceAt, sourceThreads } = this.sourceProvenance(ids);
+    if (sourceAt && (!metadata.lastSourceAt || sourceAt > metadata.lastSourceAt)) metadata.lastSourceAt = sourceAt;
+    metadata.sourceThreads = [...new Set([...(metadata.sourceThreads || []), ...sourceThreads])];
+  }
+  /** Applies only already captured, evidence-checked proposals. No provider or model calls.
+   * Dry runs execute the same mutations inside a rolled-back savepoint, including
+   * cross-proposal deduplication, and return counts without any private content. */
+  autoApplyPending(options: { dryRun?: boolean; proposalIds?: string[] } = {}): AutoApplySummary {
+    const run = () => {
+      const counts: AutoApplySummary = { created: 0, updated: 0, cancelled: 0, duplicate: 0, suppressed: 0, needsDetails: 0 };
+      const selected = options.proposalIds ? new Set(options.proposalIds) : undefined;
+      for (const proposal of this.proposals().filter(item => item.status === 'pending' && (!selected || selected.has(item.id))).sort((a, b) => a.createdAt.localeCompare(b.createdAt))) counts[this.applyAutomatically(proposal)]++;
+      return counts;
+    };
+    const write = () => {
+      if (!options.dryRun) return run();
+      this.db.exec('SAVEPOINT automatic_calendar_preview');
+      try { return run(); } finally { this.db.exec('ROLLBACK TO automatic_calendar_preview; RELEASE automatic_calendar_preview'); }
+    };
+    return this.db.isTransaction ? write() : this.transaction(write);
+  }
+  private applyAutomatically(proposal: Proposal): keyof AutoApplySummary {
+    const needs = (field?: string): 'needsDetails' => {
+      if (field && !proposal.unresolvedFields.includes(field)) { proposal.unresolvedFields.push(field); proposal.revision++; this.put('proposals', proposal.id, proposal); }
+      return 'needsDetails';
+    };
+    const finish = (event: CalendarEvent | null, outcome: NonNullable<Proposal['outcome']>): keyof AutoApplySummary => { this.finishProposal(proposal, event, 'automatic', outcome); return outcome; };
+    if (!proposal.evidence.some(excerpt => excerpt.trim().length > 2) || !proposal.sourceMessageIds.length) return needs('evidence');
+    if (proposal.action === 'create' && proposal.attendance === 'declined') return finish(null, 'suppressed');
+    // Attendance and absent optional clock/zone values are representable. Factual
+    // ambiguity, unsupported attachments and missing targets require owner input.
+    const optional: Record<string, keyof Fields | null> = { attendance: null, rsvp: null, confirmation: null, time: 'time', starttime: 'time', endtime: 'endTime', timezone: 'timeZone', endtimezone: 'endTimeZone', location: 'location', reference: 'reference', enddate: 'endDate' };
+    if (proposal.unresolvedFields.some(field => { const key = field.replace(/[ _-]/g, '').toLowerCase(); return !Object.hasOwn(optional, key) || optional[key] !== null && proposal.event[optional[key]!] !== undefined && proposal.event[optional[key]!] !== ''; })) return needs();
+    const attendance: 'confirmed' | 'invited' = proposal.attendance === 'confirmed' ? 'confirmed' : 'invited';
+    const { sourceAt, sourceThreads } = this.sourceProvenance(proposal.sourceMessageIds);
+    const recordSource = (metadata: AutomationMetadata) => this.recordSources(metadata, proposal.sourceMessageIds);
+    const complete = (fields: Fields) => {
+      // The product's explicit fallback is London. Validate that fallback too so
+      // nonexistent/ambiguous DST times cannot silently enter the subscribed feed.
+      confirmedFields({ ...fields, ...(fields.time || fields.endTime ? { timeZone: fields.timeZone || 'Europe/London' } : {}) });
+      return confirmedFields(fields);
+    };
+    const suppressed = this.proposals().some(old => old.id !== proposal.id && old.status === 'dismissed' && (
+      proposal.action === 'create' && old.action === 'create' && sameBooking(old.event, proposal.event, false) ||
+      proposal.action !== 'create' && old.action === proposal.action && old.targetEventId === proposal.targetEventId && sameValue(old.event, proposal.event)
+    ));
+    if (suppressed) return finish(null, 'suppressed');
+    if (proposal.action === 'create') {
+      if (!proposal.event.date) return needs('date');
+      try { complete(proposal.event); } catch { return needs('dateTime'); }
+      const deleted = this.all<{ event?: CalendarEvent; baseline?: Fields }>('deleted_events');
+      const legacyDeleted = this.all<{ event: CalendarEvent | null }>('confirm_results').filter(result => result.event && this.get('deleted_events', result.event.id));
+      if ([...deleted.flatMap(item => [item.event, item.baseline]), ...legacyDeleted.map(item => item.event)].some(old => old && sameBooking(old, proposal.event, false))) return finish(null, 'suppressed');
+      const duplicate = this.events().find(event => { const metadata = this.get<AutomationMetadata>('event_automation', event.id); return [event, metadata?.baseline, ...(metadata?.identities || [])].some(old => old && sameBooking(old, proposal.event)); });
+      if (duplicate) {
+        const metadata = this.get<AutomationMetadata>('event_automation', duplicate.id);
+        if (attendance === 'confirmed' && duplicate.attendance === 'invited' && metadata?.managed && !metadata.ownerFields.includes('attendance') && (!metadata.lastSourceAt || sourceAt && sourceAt >= metadata.lastSourceAt)) {
+          const event: CalendarEvent = { ...duplicate, attendance, revision: duplicate.revision + 1 }; this.saveEvent(event); metadata.baseline.attendance = attendance; recordSource(metadata); this.put('event_automation', event.id, metadata); return finish(event, 'updated');
+        }
+        if (metadata && compatibleIdentity(duplicate, proposal.event)) { recordSource(metadata); this.put('event_automation', duplicate.id, metadata); }
+        return finish(duplicate, 'duplicate');
+      }
+      const event = this.createEvent({ ...proposal.event, attendance }, 'Gmail');
+      const metadata: AutomationMetadata = { baseline: eventFields(event), ownerFields: [], managed: true, identities: [eventFields(event)] }; recordSource(metadata); this.put('event_automation', event.id, metadata);
+      return finish(event, 'created');
+    }
+    if (!proposal.targetEventId || proposal.targetRevision === undefined) return needs('targetEventId');
+    let old: CalendarEvent;
+    try { old = this.requireEvent(proposal.targetEventId, proposal.targetRevision); } catch { return needs('targetRevision'); }
+    const metadata = this.get<AutomationMetadata>('event_automation', old.id);
+    // Legacy/manual events have no reliable per-field provenance. Leave changes
+    // to those plans for explicit resolution instead of guessing ownership.
+    if (!metadata?.managed) return needs('ownerEditedEvent');
+    const referenceMatch = old.reference && proposal.event.reference && normalized(old.reference) === normalized(proposal.event.reference);
+    const referenceConflict = old.reference && proposal.event.reference && normalized(old.reference) !== normalized(proposal.event.reference);
+    const identityMatch = normalized(old.title) === normalized(proposal.event.title) && (old.date === proposal.event.date || sourceThreads.some(thread => metadata.sourceThreads?.includes(thread)));
+    if (referenceConflict || !referenceMatch && !identityMatch) return needs('targetIdentity');
+    if (metadata.lastSourceAt && (!sourceAt || sourceAt < metadata.lastSourceAt)) return sourceAt ? finish(old, 'duplicate') : needs('sourceChronology');
+    const competing = this.events().filter(event => event.id !== old.id && compatibleIdentity(event, proposal.event));
+    if (competing.length || proposal.action === 'cancel' && !compatibleIdentity(old, proposal.event)) return needs('targetIdentity');
+    if (referenceMatch && normalized(old.title) !== normalized(proposal.event.title) && this.events().some(event => event.id !== old.id && event.reference && normalized(event.reference) === normalized(old.reference))) return needs('targetIdentity');
+    if (proposal.action === 'cancel') {
+      if (metadata.ownerFields.length) return needs('ownerEditedEvent');
+      this.removeEvent(old); return finish(null, 'cancelled');
+    }
+    const before = eventFields(old); let next = suppliedFields(before, proposal.event);
+    next.attendance = before.attendance === 'confirmed' || attendance === 'confirmed' ? 'confirmed' : 'invited';
+    for (const key of metadata.ownerFields) {
+      const field = key as keyof Fields;
+      if (key !== 'attendance' && key !== 'reminderMinutes' && !sameValue(next[field], before[field]) && !sameValue(next[field], metadata.baseline[field])) return needs(`ownerEdited:${key}`);
+      if (before[field] === undefined) delete next[field]; else (next as Record<string, unknown>)[key] = before[field];
+    }
+    try { next = complete(next); } catch { return needs('dateTime'); }
+    if (sameValue(next, before)) { recordSource(metadata); this.put('event_automation', old.id, metadata); return finish(old, 'duplicate'); }
+    const event: CalendarEvent = { ...next, date: next.date!, id: old.id, source: old.source, revision: old.revision + 1 };
+    this.saveEvent(event); metadata.identities = [...(metadata.identities || [metadata.baseline]), eventFields(event)]; metadata.baseline = { ...suppliedFields(metadata.baseline, proposal.event), attendance }; recordSource(metadata); this.put('event_automation', event.id, metadata);
+    return finish(event, 'updated');
   }
   dismiss(id: string): Proposal { return this.transaction(() => { const proposal = this.get<Proposal>('proposals', id); if (!proposal) throw new AppError('not_found', 'This suggestion is no longer available.', 404); if (proposal.status === 'confirmed') throw new AppError('review_conflict', 'This suggestion has already been confirmed.', 409); if (proposal.status === 'pending') { proposal.status = 'dismissed'; proposal.revision += 1; this.put('proposals', id, proposal); } return proposal; }); }
   captured(id: string) { return Boolean(this.db.prepare('SELECT 1 FROM sources WHERE id=?').get(id)); }

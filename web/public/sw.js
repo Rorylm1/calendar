@@ -3,14 +3,14 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 self.addEventListener('push', event => {
   event.waitUntil(self.registration.showNotification('My Calendar', {
-    body: 'There are new suggestions to review.', tag: 'calendar-review',
+    body: 'Your calendar has new updates.', tag: 'calendar-updates',
     icon: '/app-icon/192', badge: '/app-icon/192',
-    data: { url: '/calendar?review=1' },
+    data: { url: '/calendar' },
   }));
 });
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const target = new URL('/calendar?review=1', self.location.origin).href;
+  const target = new URL('/calendar', self.location.origin).href;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windows) {

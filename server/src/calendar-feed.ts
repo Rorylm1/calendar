@@ -48,10 +48,15 @@ function localInstant(date: string, time: string, timeZone: string): Temporal.In
 function eventLines(event: CalendarEvent, metadata: EventExportMetadata): string[] {
   const { id, source: _source, revision, ...input } = event;
   const fields = EventFields.required({ date: true }).parse(input);
+  const invited = fields.attendance === 'invited';
+  // Attendance is presentation metadata; remove an old presentation prefix
+  // before adding it, so acceptance and legacy prefixed titles stay readable.
+  const title = fields.title.replace(/^\s*(?:invitation\s*:\s*)+/i, '') || 'Untitled plan';
   if (!Number.isSafeInteger(revision) || revision < 1) throw new AppError('feed_event_revision', 'This event needs a valid revision before it can be exported.');
   const lines = ['BEGIN:VEVENT', `UID:${hash(id)}@personal-calendar`, `SEQUENCE:${revision - 1}`,
     `DTSTAMP:${instantValue(Temporal.Instant.from(metadata.modifiedAt))}`, `LAST-MODIFIED:${instantValue(Temporal.Instant.from(metadata.modifiedAt))}`,
-    `CREATED:${instantValue(Temporal.Instant.from(metadata.createdAt))}`, `SUMMARY:${escapeCalendarText(fields.title)}`, 'CLASS:PRIVATE', 'STATUS:CONFIRMED'];
+    `CREATED:${instantValue(Temporal.Instant.from(metadata.createdAt))}`, `SUMMARY:${escapeCalendarText(`${invited ? 'INVITATION: ' : ''}${title}`)}`, 'CLASS:PRIVATE',
+    `STATUS:${invited ? 'TENTATIVE' : 'CONFIRMED'}`, `TRANSP:${invited ? 'TRANSPARENT' : 'OPAQUE'}`];
   let detail = fields.detail; const alarms: string[] = [];
   if (!fields.time) {
     const start = Temporal.PlainDate.from(fields.date);
@@ -76,7 +81,9 @@ function eventLines(event: CalendarEvent, metadata: EventExportMetadata): string
       detail = [detail, `End date: ${fields.endDate}. End time has not been provided.`].filter(Boolean).join('\n');
     }
     const reminder = fields.reminderMinutes === undefined ? 15 : fields.reminderMinutes;
-    if (reminder !== null) alarms.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escapeCalendarText(fields.title)}`, `TRIGGER:${reminder === 0 ? 'PT0M' : `-PT${reminder}M`}`, 'END:VALARM');
+    // Invitations never export alarms, even with a saved reminder preference.
+    // The preference takes effect if this same event is later confirmed.
+    if (!invited && reminder !== null) alarms.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escapeCalendarText(title)}`, `TRIGGER:${reminder === 0 ? 'PT0M' : `-PT${reminder}M`}`, 'END:VALARM');
   }
   if (fields.location) lines.push(`LOCATION:${escapeCalendarText(fields.location)}`);
   if (detail) lines.push(`DESCRIPTION:${escapeCalendarText(detail)}`);
@@ -89,8 +96,8 @@ function issueFor(event: CalendarEvent, error: unknown): FeedIssue {
 export function renderCalendarFeed(store: Store): { body: string; blockedEvents: FeedIssue[] } {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Personal Calendar//Private Calendar Feed//EN', 'CALSCALE:GREGORIAN'];
   const blockedEvents: FeedIssue[] = [];
-  // Only the confirmed events bucket is read. Invitations, evidence, source
-  // messages, booking references and account identifiers never enter the feed.
+  // Only saved events are read. Pending proposals, evidence, source messages,
+  // booking references and account identifiers never enter the feed.
   for (const event of store.events()) {
     const metadata = store.eventExportMetadata(event);
     try { lines.push(...eventLines(event, metadata)); }

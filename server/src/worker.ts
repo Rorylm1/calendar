@@ -170,17 +170,18 @@ export class CalendarWorker {
         const events = this.store.events(); const output = Extraction.parse(await this.interpreter.extract(source, events, this.store.proposals(), signal)); signal?.throwIfAborted();
         const proposals: Omit<Proposal, 'id' | 'createdAt' | 'revision' | 'status'>[] = [];
         for (const candidate of output.proposals) {
-          if (candidate.attendance === 'declined' && candidate.action === 'create') continue;
           const rawFields = Object.fromEntries(Object.entries({ ...candidate.event, time: minuteTime(candidate.event.time), endTime: minuteTime(candidate.event.endTime) }).filter(([, value]) => value !== null)); const event = EventFields.parse(rawFields);
           const target = candidate.targetEventId ? events.find(x => x.id === candidate.targetEventId) : undefined;
           const corpus = sourceCorpus(source).replace(/\s+/g, ' ').toLowerCase();
           const evidence = candidate.evidence.filter(text => text.length > 2 && text.length <= 700 && corpus.includes(text.replace(/\s+/g, ' ').toLowerCase())).slice(0, 5);
           if (!evidence.length) throw new Error('Model returned no verifiable source excerpt');
-          if (candidate.action === 'create' && events.some(existing => existing.title.toLowerCase() === event.title.toLowerCase() && existing.date === event.date && existing.time === event.time && existing.reference === event.reference)) continue;
           const unresolvedFields = [...new Set([...candidate.unresolvedFields, ...(!event.date ? ['date'] : []), ...(candidate.action !== 'create' && !target ? ['targetEventId'] : [])])];
           proposals.push({ action: candidate.action, ...(target ? { targetEventId: target.id, targetRevision: target.revision } : {}), event, attendance: candidate.attendance, reason: candidate.reason.slice(0, 1200), evidence, unresolvedFields, sourceMessageIds: [source.id] });
         }
-        this.store.transaction(() => { for (const proposal of proposals) this.store.putProposal(proposal); this.store.sourceStatus(source.id, 'processed'); });
+        this.store.transaction(() => {
+          const proposalIds = proposals.map(proposal => this.store.putProposal(proposal)?.id).filter((id): id is string => Boolean(id));
+          this.store.autoApplyPending({ proposalIds }); this.store.sourceStatus(source.id, 'processed');
+        });
       } catch (error) {
         if (signal?.aborted) { this.store.sourceStatus(source.id, 'fetched'); this.processingStatus = 'idle'; this.processingError = null; return; }
         if (error instanceof ProcessingPaused) { this.store.sourceStatus(source.id, 'fetched'); this.processingStatus = error.reason; this.processingError = safeError(error); return; }

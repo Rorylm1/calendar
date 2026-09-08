@@ -5,6 +5,7 @@ export type EventKind =
   | 'social'
   | 'appointment'
   | 'other';
+export type Attendance = 'confirmed' | 'invited';
 export type EventFields = {
   title: string;
   date?: string;
@@ -18,6 +19,7 @@ export type EventFields = {
   detail: string;
   reference?: string;
   reminderMinutes?: number | null;
+  attendance?: Attendance;
 };
 export type CalendarEvent = EventFields & {
   id: string;

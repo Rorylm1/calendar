@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import webPush, { type PushSubscription } from 'web-push';
 import { z } from 'zod';
 import type { Config } from './config.ts';
+import type { Proposal } from './domain.ts';
 import { hash } from './crypto.ts';
 import { AppError } from './errors.ts';
 import { Store } from './store.ts';
@@ -18,7 +19,10 @@ const HOUR = 3_600_000;
 const SUBSCRIPTIONS = 'push_subscriptions';
 const META = 'push_metadata';
 const OUTBOX = 'push_outbox';
-export const REVIEW_PUSH_PAYLOAD = Object.freeze({ title: 'Edge', body: 'New plans are ready to review.', url: '/calendar?review=1', tag: 'calendar-review', renotify: false });
+export const CALENDAR_PUSH_PAYLOAD = Object.freeze({ title: 'My Calendar', body: 'Your calendar has new updates.', url: '/calendar', tag: 'calendar-updates', renotify: false });
+function isCalendarUpdate(proposal: Proposal) {
+  return proposal.status === 'pending' || (proposal.status === 'confirmed' && proposal.appliedBy === 'automatic' && ['created', 'updated', 'cancelled'].includes(proposal.outcome || ''));
+}
 export type PushConfig = Config & { VAPID_PUBLIC_KEY?: string; VAPID_PRIVATE_KEY?: string; VAPID_SUBJECT?: string };
 type DeliveryCode = 'subscription_expired' | 'provider_rejected' | 'provider_unavailable' | 'rate_limited' | 'network_error' | 'unsafe_endpoint' | 'delivery_unknown' | 'delivery_expired' | 'service_error';
 type Device = { id: string; subscription: PushSubscription; baselineIds: string[]; baselineWhileBusy: boolean };
@@ -99,7 +103,7 @@ export function createPushSender(config: PushConfig, transport: { resolve?: type
       void (transport.resolve || resolvePushTarget)(subscription.endpoint).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
     });
     signal.throwIfAborted();
-    const details = webPush.generateRequestDetails(subscription, payload, { vapidDetails: { publicKey: config.VAPID_PUBLIC_KEY!, privateKey: config.VAPID_PRIVATE_KEY!, subject: config.VAPID_SUBJECT! }, contentEncoding: 'aes128gcm', TTL: 3600, urgency: 'low', topic: 'calendar-review' });
+    const details = webPush.generateRequestDetails(subscription, payload, { vapidDetails: { publicKey: config.VAPID_PUBLIC_KEY!, privateKey: config.VAPID_PRIVATE_KEY!, subject: config.VAPID_SUBJECT! }, contentEncoding: 'aes128gcm', TTL: 3600, urgency: 'low', topic: 'calendar-updates' });
     return new Promise((resolve, reject) => {
       const url = validatePushEndpoint(details.endpoint);
       const req = (transport.request || httpsRequest)({ hostname: target.address, family: target.family, servername: target.hostname, port: 443, method: 'POST', path: url.pathname + url.search, headers: { ...details.headers, Host: target.hostname }, agent: false, signal }, response => {
@@ -137,7 +141,7 @@ export class ReviewPushWorker {
     return { configured: pushConfigured(this.config), publicKey: pushConfigured(this.config) ? this.config.VAPID_PUBLIC_KEY! : null, enabled: devices.length > 0, subscriptionCount: devices.length, subscriptionIds: devices.map(item => item.id), delivery: { state, lastSentAt: meta.lastSentAt, lastErrorCode, nextAttemptAt: outstanding.length ? new Date(Math.min(...outstanding.map(item => item.nextAttemptAt))).toISOString() : null }, quietHours: { start: 22, end: 8, timeZone: 'Europe/London' } };
   }
   subscribe(input: unknown) {
-    if (!pushConfigured(this.config)) throw new AppError('push_not_configured', 'Review notifications are not available yet.', 409);
+    if (!pushConfigured(this.config)) throw new AppError('push_not_configured', 'Calendar notifications are not available yet.', 409);
     const subscription = validatePushSubscription(input, this.now()); const id = hash(subscription.endpoint);
     this.store.transaction(() => {
       const devices = this.devices(); const old = devices.find(item => item.id === id);
@@ -170,7 +174,7 @@ export class ReviewPushWorker {
     const now = this.now();
     for (const device of this.devices()) if (device.subscription.expirationTime != null && device.subscription.expirationTime <= now) this.removeDevice(device.id);
     if (!this.devices().length) return;
-    const proposals = this.store.proposals(); const ids = proposals.map(item => item.id); const pending = new Set(proposals.filter(item => item.status === 'pending').map(item => item.id));
+    const proposals = this.store.proposals(); const ids = proposals.map(item => item.id); const pending = new Set(proposals.filter(isCalendarUpdate).map(item => item.id));
     const busy = this.busy();
     for (const device of this.devices()) if (device.baselineWhileBusy) { device.baselineIds = ids; device.baselineWhileBusy = busy; this.store.put(SUBSCRIPTIONS, device.id, device); }
     const meta = this.metadata(); const seen = new Set(meta.observedIds);
@@ -201,10 +205,10 @@ export class ReviewPushWorker {
       if (signal.aborted || this.stopped || this.busy() || pushQuietHours(this.now())) return;
       const fresh = this.store.get<Batch>(OUTBOX); const device = this.store.get<Device>(SUBSCRIPTIONS, id); const delivery = fresh?.deliveries[id];
       if (!fresh || !device || !delivery || delivery.state !== 'pending' || delivery.nextAttemptAt > this.now()) continue;
-      if (!this.store.proposals().some(item => item.status === 'pending' && fresh.proposalIds.includes(item.id))) { delivery.state = 'failed'; delivery.error = null; this.store.put(OUTBOX, 'default', fresh); continue; }
+      if (!this.store.proposals().some(item => isCalendarUpdate(item) && fresh.proposalIds.includes(item.id))) { delivery.state = 'failed'; delivery.error = null; this.store.put(OUTBOX, 'default', fresh); continue; }
       delivery.state = 'sending'; delivery.attempts++; this.store.put(OUTBOX, 'default', fresh);
       let result: Awaited<ReturnType<PushSend>> | undefined; let failure: DeliveryCode | undefined;
-      try { result = await this.send(device.subscription, JSON.stringify(REVIEW_PUSH_PAYLOAD), signal); }
+      try { result = await this.send(device.subscription, JSON.stringify(CALENDAR_PUSH_PAYLOAD), signal); }
       catch (error) { failure = error instanceof AppError && ['unsafe_push_endpoint', 'invalid_push_endpoint'].includes(error.code) ? 'unsafe_endpoint' : signal.aborted ? 'delivery_unknown' : 'network_error'; }
       const saved = this.store.get<Batch>(OUTBOX); if (!saved || saved.id !== fresh.id || !saved.deliveries[id] || !this.store.get(SUBSCRIPTIONS, id)) continue;
       const entry = saved.deliveries[id]; const latest = this.metadata(); const status = result?.statusCode || 0;

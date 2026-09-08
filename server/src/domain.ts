@@ -11,15 +11,16 @@ export const ZoneValue = z.string().max(100).refine(value => { try { new Intl.Da
 export const Kind = z.enum(['food', 'travel', 'stay', 'social', 'appointment', 'other']);
 // Undefined uses the timed-event default. Null explicitly disables reminders.
 export const ReminderMinutes = z.number().int().min(0).max(10080).nullable();
+export const Attendance = z.enum(['confirmed', 'invited']);
 export const EventFields = z.object({
   title: z.string().trim().min(1).max(240), date: DateValue.optional(), time: TimeValue.optional(),
   endDate: DateValue.optional(), endTime: TimeValue.optional(), timeZone: ZoneValue.optional(), endTimeZone: ZoneValue.optional(),
-  kind: Kind.default('other'), location: z.string().max(1000).default(''), detail: z.string().max(6000).default(''), reference: z.string().max(240).optional(), reminderMinutes: ReminderMinutes.optional(),
+  kind: Kind.default('other'), location: z.string().max(1000).default(''), detail: z.string().max(6000).default(''), reference: z.string().max(240).optional(), reminderMinutes: ReminderMinutes.optional(), attendance: Attendance.optional(),
 }).strict();
 export const EventPatch = z.object({
   title: z.string().trim().min(1).max(240).optional(), date: DateValue.optional(), time: TimeValue.nullable().optional(),
   endDate: DateValue.nullable().optional(), endTime: TimeValue.nullable().optional(), timeZone: ZoneValue.nullable().optional(), endTimeZone: ZoneValue.nullable().optional(),
-  kind: Kind.optional(), location: z.string().max(1000).optional(), detail: z.string().max(6000).optional(), reference: z.string().max(240).nullable().optional(), reminderMinutes: ReminderMinutes.optional(),
+  kind: Kind.optional(), location: z.string().max(1000).optional(), detail: z.string().max(6000).optional(), reference: z.string().max(240).nullable().optional(), reminderMinutes: ReminderMinutes.optional(), attendance: Attendance.optional(),
 }).strict();
 export type Fields = z.infer<typeof EventFields>;
 export type CalendarEvent = Fields & { id: string; date: string; source: 'Gmail' | 'Manual'; revision: number };
@@ -27,6 +28,7 @@ export type Proposal = {
   id: string; action: 'create' | 'update' | 'cancel'; targetEventId?: string; targetRevision?: number;
   event: Fields; attendance: 'confirmed' | 'invited' | 'unknown' | 'declined'; reason: string; evidence: string[];
   unresolvedFields: string[]; status: 'pending' | 'confirmed' | 'dismissed'; revision: number; sourceMessageIds: string[]; createdAt: string;
+  appliedBy?: 'automatic' | 'owner'; appliedAt?: string; outcome?: 'created' | 'updated' | 'cancelled' | 'duplicate' | 'suppressed';
 };
 export type SourceMessage = {
   id: string; threadId: string; from: string; to: string; subject: string; receivedAt: string; sentByOwner: boolean;

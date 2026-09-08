@@ -57,6 +57,7 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
   app.post('/v1/gmail/disconnect', async () => { await worker.stop(); const result = await google.disconnect(); if (overrides.schedule !== false) worker.start(); return result; });
   app.get('/v1/gmail/triage', async () => ({ entries: store.audit() }));
   app.post('/v1/gmail/retry-processing', async (_request, reply) => { store.retryFailures(); worker.kickProcessing(); return reply.status(202).send({ accepted: true }); });
+  app.post('/v1/proposals/apply-pending', async request => { const body = z.object({ dryRun: z.boolean().default(true) }).strict().parse(request.body || {}); return store.autoApplyPending(body); });
   app.post('/v1/proposals/:id/confirm', async request => { const { id } = z.object({ id: z.string().min(1) }).parse(request.params); const body = z.object({ event: EventPatch.optional(), expectedRevision: Revision.optional() }).strict().parse(request.body || {}); return store.confirm(id, body.event, body.expectedRevision); });
   app.post('/v1/proposals/:id/dismiss', async request => { const { id } = z.object({ id: z.string().min(1) }).parse(request.params); return { proposal: store.dismiss(id) }; });
   app.post('/v1/events', async (request, reply) => reply.status(201).send({ event: store.createEvent(EventFields.parse(request.body)) }));

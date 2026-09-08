@@ -4,13 +4,13 @@ Status: Edge selected as the working direction, 7 September 2026. Rory: “Edge 
 
 ## Current decision — Edge
 
-Use **J — Edge** for the functional personal calendar. Keep its full-width month, dark slate surfaces, restrained mint accents, slim navigation, and dismissible selected-day details. On mobile, details sit below the month. The calendar stays the primary surface; connection status and review actions should remain easy to reach without crowding it.
+Use **J — Edge** for the functional personal calendar. Keep its full-width month, dark slate surfaces, restrained mint accents, slim navigation, and dismissible selected-day details. On mobile, details sit below the month. The calendar stays the primary surface; connection status and missing-detail actions should remain easy to reach without crowding it.
 
-The next implementation focuses on Gmail: connection, hourly capture, review, and confirmed plans. Carry the Edge treatment into connection, processing, empty, and error states. Preserve the existing fictional design studies separately from real personal data. This choice does not freeze every spacing or typography detail.
+Current interaction decision, 8 September 2026: Gmail adds valid bookings and invitations automatically. Use the same Edge colour treatment for both; invitation titles have exactly one `INVITATION: ` prefix. Only missing or conflicting facts go to Needs details. The single Apple Calendar subscription uses the same prefix. Carry the Edge treatment into connection, processing, empty, and error states. Preserve the existing fictional design studies separately from real personal data. This choice does not freeze every spacing or typography detail.
 
 ## Objective
 
-Make a personal calendar that feels exceptionally clear, modern, and enjoyable to use. It should be easy to see what is happening, decide whether an invitation belongs in the calendar, and find the useful details of a booking.
+Make a personal calendar that feels exceptionally clear, modern, and enjoyable to use. It should be easy to see what is happening, distinguish an invitation from a confirmed plan, change attendance without sending an RSVP, and find the useful details of a booking.
 
 The emotional payoff is simple: the scattered message has become a plan I can rely on. The interface should express that through clarity and a satisfying interaction, with enough personality to feel like a thoughtfully made independent app.
 
@@ -29,7 +29,7 @@ The distinctive-design research is being used for its design process, not as ver
 
 ## What is established, and what is open
 
-**Established:** clean, modern, delightful; **quiet evening mood with dark slate, sharp detail, and restrained light accents**; **the month visible first so Rory can see how the weeks are filling up**; personal use; mobile first with a useful desktop layout; reviewed suggestions from messages; social plans and all dated bookings; details that remain honest about missing information.
+**Established:** clean, modern, delightful; **quiet evening mood with dark slate, sharp detail, and restrained light accents**; **the month visible first so Rory can see how the weeks are filling up**; personal use; mobile first with a useful desktop layout; automatic plans and labelled invitations from messages; social plans and all dated bookings; details that remain honest about missing information.
 
 **Open:** the strength of calendar grid lines, how much event detail fits inside the month, typography, surface depth, placement of the selected day's details, and the signature interaction. Names below label experiments; they are not proposed product names.
 
@@ -41,9 +41,11 @@ The month-plus-agenda structure fits this preference. A dark interface updates t
 
 Dates, times, places, and the relationship between plans provide enough material for a distinctive calendar. A restaurant reservation, an overnight journey, and a hotel stay should feel related while showing their particular useful details.
 
-The working direction is **Quiet evening**. Keep the full month easy to scan, with the selected day's plans close at hand. Character should come from the proportions of the calendar, carefully drawn type, and continuity between a suggestion and its place in the month.
+The working direction is **Quiet evening**. Keep the full month easy to scan, with the selected day's plans close at hand. Character should come from the proportions of the calendar, carefully drawn type, and continuity between a captured plan and its place in the month.
 
 ## Round 1 — five original mockups
+
+Historical design exploration: the studies retain the original review-first interactions for comparison. They do not define the current automatic-entry policy.
 
 Open `/designs` in the deployed app. Switch between A–E, use the phone preview, and collect feedback in Notes.
 
@@ -62,6 +64,8 @@ The comparison app is retained in [web/app/designs/page.tsx](web/app/designs/pag
 Use the A–E tabs to compare them, try a busy date such as 19 September, and open Review. Shortlisting a direction does not commit the project to it. Notes are saved in the current browser and can be copied into this conversation.
 
 ## Round 2 — Field and Contour, refined
+
+Historical comparison round, completed before Edge was selected. Its sample review flow is preserved; the personal app now adds valid items automatically.
 
 Rory's feedback: **Field is the favourite; Contour also appeals.** The next five prototypes stay close to those families and aim for a very clean, modern customer experience. This is a second comparison round, not a final selection.
 
@@ -110,38 +114,39 @@ Tuesday 8 September
 19:30  Dinner at Luca
        2 people · London
 
-Calendar           Review 3           Settings
+Calendar        Needs details 3      Settings
 ```
 
 - **Today and selected day are different states.** Show today's date with a quiet marker and the selected date with a stronger outline or fill. Neither should resemble an unread notification.
-- **Occupancy should be honest.** Marks represent confirmed plans. An invitation awaiting a decision stays in Review, with no solid booking block in the calendar.
+- **Attendance should be explicit.** Show all dated plans together. Prefix each invitation title exactly once with `INVITATION: `; confirmed titles stay unprefixed. Use the same event colour, with no per-invitation, sender or category palette. Invitations do not imply busy time.
 - **A stay is a span; a dinner is an event.** Give multi-day bookings a compact connected treatment. The day detail explains check-in/out boundaries so a span does not imply an invented time.
 - **Crowded days need a deliberate limit.** Show the first readable entries plus a clear additional-event count; the selected-day panel exposes the complete list.
-- **Navigation stays obvious.** Previous/next month, Today, and Add event remain accessible without relying on gestures. Review stays reachable without occupying half the home screen.
+- **Navigation stays obvious.** Previous/next month, Today, and Add event remain accessible without relying on gestures. Needs details stays reachable without occupying half the home screen.
 - **Long journeys and date-only bookings remain understandable.** The detail panel carries origin/destination times and zones or “Time not supplied”; the month should not try to contain every booking field.
 
 ### Where the delight could come from
 
-Selecting a day keeps the month stable and updates its details. After a successful confirmation, the new event takes its place in the appropriate date, with a brief visual cue and clear feedback. The user should understand what changed without watching a long animation.
+Selecting a day keeps the month stable and updates its details. After an automatic addition or a successful missing-detail correction, the event takes its place in the appropriate date, with a brief visual cue and clear feedback. The user should understand what changed without watching a long animation.
 
-**Self-critique:** dark slate and a light accent are only a palette. The design succeeds if the month is readable, the selected day feels connected to its details, and reviewing a message feels effortless. Add no decorative effects to compensate for unresolved hierarchy.
+**Self-critique:** dark slate and a light accent are only a palette. The design succeeds if the month is readable, the selected day feels connected to its details, and understanding a captured plan or resolving a factual exception feels effortless. Add no decorative effects to compensate for unresolved hierarchy.
 
 ## The interaction that should make this feel special
 
-Review is central to this product. Give it the same design attention as the calendar.
+Automatic entry is central to the product. The month should be useful without clearing an inbox; reserve Needs details for facts that cannot safely be filled in.
 
 | Situation | What the interface should make clear | Useful action |
 | --- | --- | --- |
-| Restaurant confirmation | Venue, date, time, party size, and short source evidence | Add to calendar |
-| Party invitation | The invitation is real; attendance has not been decided | I'm going / Dismiss; confirming does not send an RSVP |
+| Restaurant confirmation | Added automatically with venue, date, time and source evidence | Edit details if needed |
+| Party or webinar invitation | Already on the calendar with exactly one `INVITATION: ` prefix and the same event colour | I'm going / Remove; no RSVP is sent |
 | Forwarded “tomorrow” | The original date is missing | Choose date |
-| Train time changed | Existing time and proposed time, with the change highlighted | Save change |
-| Reservation cancelled | Exactly which saved booking would be removed | Remove from calendar |
-| Hotel without check-in time | The stay dates are known; the time is not supplied | Add the date-only stay |
+| Safely matched train time change | The saved booking has updated automatically, preserving owner edits | Inspect or edit details |
+| Safely matched reservation cancellation | The cancelled booking is removed automatically | No mandatory action |
+| Conflicting amendment or unmatched cancellation | The missing match or conflicting facts are explicit in Needs details | Resolve the facts before applying |
+| Hotel without check-in time | The dated stay is added automatically; time remains not supplied | Edit if useful |
 
-Show the essential details immediately and let the source expand below. Avoid confidence percentages, “AI detected” badges, and a large chat transcript. Explain uncertainty in ordinary language: “Are you going?” or “Which Friday?”
+Show the essential details immediately and let the source expand below. Avoid confidence percentages, “AI detected” badges, and a large chat transcript. Explain factual uncertainty in ordinary language, such as “Which Friday?” Attendance uncertainty is already represented by the invitation label; it does not require clearing an inbox.
 
-Do not mix unresolved invitations into confirmed calendar items. A visible Review count provides access without making every open of the app feel like an inbox-clearing task.
+Invitations and confirmed plans share one calendar, distinguished by exactly one `INVITATION: ` title prefix and the same event colours. A Needs details count is reserved for unresolved facts. Keep the underlying editable title unprefixed and make attendance changes reversible.
 
 ## Small sources of delight to explore
 
@@ -162,7 +167,9 @@ Motion should take roughly a fraction of a second and never delay an action. Use
 - Do not copy the chess document's font bans mechanically. Judge the rendered typography against this product; its role and execution matter more than novelty.
 - Keep body text comfortable, essential labels readable, touch targets generous, visible keyboard focus, and contrast sufficient. A clean interface still needs clear controls.
 
-## How we will explore next
+## Historical exploration workflow
+
+The sequence below records how the ten studies were compared before Edge was selected. Keep its fictional review interactions as process references, not current product requirements.
 
 1. Use the confirmed mood and month-first layout as the brief. Record further reactions below.
 2. Review Round 2 in `research/designs/`, comparing the five Field/Contour refinements with the originals using the same fictional month and review examples.
@@ -184,4 +191,4 @@ The shared fictional examples will include dinner on Tuesday 8 September 2026, a
 | Agenda/month/week as the home view | Month selected by Rory, to see how the weeks are filling up |
 | Product name, final fonts, palette, and signature | Open |
 
-Next: implement Gmail capture and review using Edge, then refine the interface from real use and Rory’s feedback.
+Current implementation: automatic calendar entry, same-colour invitation labels, reversible attendance controls and Needs details are built and tested with fictional browser flows. Deployment of this update and the live existing-pending migration remain open. Next: verify the deployed experience, collect Rory’s design feedback and test the single subscription on the actual iPhone.

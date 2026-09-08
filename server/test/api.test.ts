@@ -25,3 +25,18 @@ test('API validates real dates and leaves incomplete suggestions pending', async
   const approved = await app.inject({ method: 'POST', url: `/v1/proposals/${pending.id}/confirm`, headers, payload: { event: { date: '2026-09-08' } } }); assert.equal(approved.statusCode, 200);
   const state = (await app.inject({ method: 'GET', url: '/v1/state', headers })).json(); assert.equal(state.proposals.length, 0); assert.equal(state.events.length, 1); await app.close(); store.close();
 });
+test('pending migration requires service authentication, defaults to a rollback preview, and exposes counts only', async () => {
+  const { config, store } = fixture(); store.putProposal(proposal({ attendance: 'invited' }));
+  const { app } = buildApp(config, { store, schedule: false }); const headers = { authorization: `Bearer ${config.CALENDAR_SERVICE_TOKEN}` };
+  assert.equal((await app.inject({ method: 'POST', url: '/v1/proposals/apply-pending', payload: { dryRun: false } })).statusCode, 401);
+  const preview = await app.inject({ method: 'POST', url: '/v1/proposals/apply-pending', headers, payload: {} });
+  assert.equal(preview.statusCode, 200); assert.equal(preview.json().created, 1); assert.equal(store.events().length, 0); assert.ok(!preview.body.includes('Luca'));
+  assert.equal((await app.inject({ method: 'POST', url: '/v1/proposals/apply-pending', headers, payload: { unexpected: true } })).statusCode, 400);
+  const applied = await app.inject({ method: 'POST', url: '/v1/proposals/apply-pending', headers, payload: { dryRun: false } });
+  assert.equal(applied.statusCode, 200); assert.equal(store.events()[0]!.attendance, 'invited');
+  const state = (await app.inject({ method: 'GET', url: '/v1/state', headers })).json(); assert.equal(state.events.length, 1); assert.equal(state.proposals.length, 0);
+  const event = state.events[0];
+  const accepted = await app.inject({ method: 'PATCH', url: `/v1/events/${event.id}`, headers, payload: { event: { attendance: 'confirmed' }, expectedRevision: event.revision } });
+  assert.equal(accepted.statusCode, 200); assert.equal(accepted.json().event.id, event.id); assert.equal(accepted.json().event.attendance, 'confirmed');
+  await app.close(); store.close();
+});
