@@ -60,7 +60,7 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 - [x] Build and deploy the minimal signed webhook in its disabled state with a separate encrypted spike inbox; 13 new tests cover authentication, allowlists, replay, persistence and limits.
 - [x] Obtain the Meta-provided test receiver, verify the owner’s existing phone, and configure Meta’s callback and message subscriptions.
-- [ ] Complete a real delivery check from the owner’s phone.
+- [ ] Complete a real delivery check from the owner’s phone. The first reported forward did not appear; Meta’s signed dashboard delivery passed. The unpublished-app restriction and publishing checklist are the current blocker (see spike record).
 - [ ] Forward an actual text message from Rory's normal WhatsApp account and inspect the content and context delivered.
 - [x] Verify webhook authentication and sender/receiver restrictions with synthetic payloads.
 - [ ] Verify the actual Meta signature and sender restriction with a real forward.
