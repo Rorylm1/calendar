@@ -141,6 +141,7 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [x] Implement ordinary single-event calendar attachment parsing and incomplete review items for relevant unsupported attachments; prevent short image adverts from bypassing triage.
 - [x] Implement the original proposal confirmation flow and its idempotency/revision safeguards. The automatic-entry update below supersedes mandatory approval.
 - [ ] Verify real hourly capture through automatic addition and the missing-detail exception flow, including real confirmations mixed with advertising or labelled Promotions/Updates.
+- [x] Observe the first scheduled Gmail → automatic invitation → existing subscription flow: the 10:06 UTC run on 8 September created one invited event; the app reports 24 events, and the feed contains exactly one invitation prefix with tentative/free status and no alarm. No failed or queued source messages remained at the check. This verifies the integration path, not the owner's judgement of that invitation's accuracy.
 - [ ] Evaluate social plans and every major booking type, plus invitation/acceptance/refusal, duplicates, receipts, amendments, and cancellations using real or appropriately sanitized examples.
 - [ ] Measure real-mail quality, latency, correction effort, triage misses, and running cost before revisiting models or the budget.
 
@@ -208,6 +209,7 @@ The milestone numbers identify work areas, not the current execution order. The 
 **Owners:** Rory + Codex for final design and storytelling; Codex for demo wiring, isolation, verification, and deployment preparation.
 
 - [ ] Polish the designed flows using feedback from private use, including mobile behaviour, accessibility, empty states, and motion.
+- [ ] Update the isolated fictional walkthrough to demonstrate automatic booking/invitation addition and Needs details, matching the current private app while retaining the original design studies. This can proceed without account/device access; keep scripted-data disclosure and isolation tests.
 - [x] Build a separate fictional dataset and demo mode with no live Gmail/WhatsApp connections, personal feed tokens, source messages, or personal records.
 - [x] Preserve the original scripted demo story: a message becomes a suggestion, the user reviews it, and it appears on the calendar. This is a historical demonstration of the earlier review-first flow, not the current private-app policy.
 - [x] Verify demo isolation with runtime import/capability tests, production connection restrictions, generated-asset secret checks and unauthenticated API rejection. A full browser network recording remains a separate acceptance check.

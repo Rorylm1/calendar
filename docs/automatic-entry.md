@@ -37,3 +37,13 @@ After access recovered, backend release `20260908T092929Z` was deployed with con
 No extra Gmail scan or paid model call was requested. Source data, the verified backup and count-only migration report remain under ignored `ops/local/`. Production Vercel deployment `dpl_4rQMbHQsTs7iPDHtZUNppPTJsqSu` is READY for main commit `10b0ad3`. The authenticated page returned 200 with the automatic-entry copy and invitation filter. The corresponding state request returned 503 after about 21 seconds during recurring host pressure, so hosted API reliability remains unresolved despite successful deployment and earlier backend/feed verification. Actual iPhone refresh and device delivery remain pending.
 
 Subsequent owner-authorized mitigation paused both recurring TradeR jobs. Three authenticated production state reads then returned 200 with all 23 events, Gmail connected and the eight remaining factual exceptions. See [the pause and recovery record](calendar-reliability.md). Longer-term uptime and physical iPhone acceptance remain open.
+
+## First scheduled automatic invitation — 8 September, 10:06 UTC
+
+A later read-only verification found a new `automatic`/`created` application with invited attendance at 10:06:28 UTC, following the scheduled Gmail capture completed at 10:06:13. There were 24 saved events, including one invitation; eight factual exceptions remained. All retained sources were either processed or filtered, with no queued or failed messages. The next capture was scheduled for 11:06 UTC. No operator scan, model call or manual event write was requested for this check.
+
+The production state endpoint returned 200. The existing subscription returned all 24 events and the invitation used exactly one `INVITATION: ` prefix, `STATUS:TENTATIVE`, `TRANSP:TRANSPARENT` and no `VALARM`. Its contents were checked without printing the private title, source message or subscription token. This closes the first real scheduled integration-path check; Rory still needs to assess extraction accuracy and observe the actual iPhone refresh.
+
+Both TradeR timers remained disabled/inactive. All 10-, 60- and 300-second memory-pressure averages were zero, with about 3.1 GiB available. Calendar API, HTTPS and scheduled backup services remained active. The implementation API reference was updated to document event attendance, application audit outcomes and the preview-by-default migration contract.
+
+A new online snapshot after automatic additions was copied off-host and passed isolated integrity/decryption verification, covering the new attendance/application metadata. The live database and services were unchanged. The separate independent key-recovery and complete provider-restore acceptance items remain open.
