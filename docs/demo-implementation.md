@@ -47,3 +47,9 @@ The original demo's browser checks covered 390/768/1440 px layouts, focus restor
 Open `/demo` → **Try a message** → **A dinner booking** → **Try this message**. The booking appears on the 17th automatically. Try the birthday sample and open its event to switch between invited and going. Try the missing-date example to see **Needs details**, or the travel offer to see filtering. **Reset** restores the initial six plans.
 
 These examples are scripted and temporary. They do not demonstrate real WhatsApp delivery, live AI interpretation, a working iPhone subscription or push delivery.
+
+## Deployment and handoff
+
+Commit `437affd` was pushed to `Rorylm1/calendar` main. Vercel deployment `dpl_2pT6HxoRsqYazhpXVYYz8KteJzVK` reached READY under the verified `rorylm1` account and serves <https://rory-calendar.vercel.app/demo>. The production page returned 200 with the updated copy and restrictive connection policy; the unauthenticated private state API returned 401. The generated public assets contained none of the configured sensitive web values checked. No backend deployment, provider call or personal-data mutation was needed.
+
+Background milestone coding is paused at this handoff. Remaining acceptance requires an unlocked browser, Rory's design/mail-quality feedback, Meta account/test-receiver access, an actual iPhone and an owner-controlled independent key-recovery destination. These remain open rather than being inferred from unit tests. Gmail's existing hourly checks are independent of this coding automation and remain scheduled. TradeR's automatic jobs must remain paused.

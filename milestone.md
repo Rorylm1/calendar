@@ -204,7 +204,7 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 ## Milestone 7 — Polish and publish the fictional demo
 
-**Status:** `/demo` now uses scripted automatic booking/invitation addition, exact invitation labels and Needs details. The web suite has 49 passing tests. The original browser layout checks predate this update; new browser interaction checks are blocked by the locked Mac. Native date-input/device acceptance, a full network recording and Rory’s design review remain open; see [the demo record](docs/demo-implementation.md).
+**Status:** `/demo` now uses scripted automatic booking/invitation addition, exact invitation labels and Needs details. The web suite has 49 passing tests. The original browser layout checks predate this update; new browser interaction checks are blocked by the locked Mac. Commit `437affd` is deployed and the production demo/access-boundary HTTP checks pass. Background coding is paused pending the remaining owner/account/device acceptance. Native date-input/device acceptance, a full network recording and Rory’s design review remain open; see [the demo record](docs/demo-implementation.md).
 
 **Owners:** Rory + Codex for final design and storytelling; Codex for demo wiring, isolation, verification, and deployment preparation.
 
