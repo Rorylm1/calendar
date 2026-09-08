@@ -27,3 +27,13 @@ Back up before applying the existing queue. Test the preview, application, prese
 - A verified production backup preview preserves all 15 existing events, adds eight eligible pending items and leaves eight needing details. Repeating the application makes no changes. This preview uses a disposable database and no provider calls.
 
 Actual iPhone subscription refresh and device notification delivery remain to be observed on Rory’s phone. Synthetic lifecycle tests do not establish interpretation accuracy across all real mail.
+
+## Rollout status — 8 September 2026
+
+The implementation is committed as `df9718a` on `codex/automatic-invitations`. Its Vercel preview build is READY under the verified `rorylm1` account. Production remains on `d4abd01`: backend rollout and existing-pending application have **not** happened.
+
+Backend deployment attempts stopped during read-only preflight checks because SSH access repeatedly stalled. An authenticated production state request also returned 503 after approximately 20 seconds. Both calendar services were active during a successful host check, but the shared host had severe memory stalls (one-minute full memory pressure about 68%, load average about 19). The existing calendar-only memory protection is insufficient under that load. No unrelated process was stopped, no swap or capacity change was made, and the existing events, credentials, feed grant and notification preferences were untouched.
+
+The existing background task will retry access with a bound. After access recovers: inspect memory and available compression support; deploy the backend with `--preserve-env`; run the authenticated preview, then explicit application; verify saved-event and subscription preservation; push the tested release to `main`; and check the Vercel API and private feed. A conditional temporary RAM-only zram trial can be evaluated without writing private heap contents to disk; support and benefit must be verified before claiming recovery. See the [kernel zram documentation](https://docs.kernel.org/admin-guide/blockdev/zram.html). Do not disable an in-use swap device while memory remains exhausted.
+
+The verified backup and count-only preview report are in ignored `ops/local/`. The live migration helper is also private and uses the running service endpoint; it has not been executed. No additional Gmail scan or paid model run is needed for this migration.
