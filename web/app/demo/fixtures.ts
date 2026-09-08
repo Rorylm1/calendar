@@ -17,26 +17,26 @@ export const INITIAL_EVENTS: readonly CalendarEvent[] = [
 const suggestion = (sampleId: SampleId, event: Proposal['event'], patch: Partial<DemoProposal> = {}): DemoProposal => ({ id: `suggestion-${sampleId}`, sampleId, source: 'Sample email', action: 'create', event, attendance: 'confirmed', reason: 'The sample confirms a personal booking.', evidence: [], unresolvedFields: [], revision: 1, ...patch });
 export const SAMPLES: readonly DemoSample[] = [
   {
-    id: 'dinner', label: 'A dinner booking', hint: 'A booking, ready to review', source: 'Sample email', sender: 'Juniper Reservations',
+    id: 'dinner', label: 'A dinner booking', hint: 'Added automatically', source: 'Sample email', sender: 'Juniper Reservations',
     body: 'Your table for four at Juniper is confirmed for Thursday 17 September 2026 at 19:30.\n\nYou’ll find us in Islington, London. We look forward to welcoming you.',
-    explanation: 'A confirmed booking has a place, a date and a time. You still choose what goes on the calendar.',
+    explanation: 'This confirmed booking goes straight onto your calendar. You can edit or remove it afterwards.',
     proposal: suggestion('dinner', { title: 'Dinner at Juniper', date: '2026-09-17', time: '19:30', kind: 'food', location: 'Islington, London', detail: 'Table for four. End time not supplied.' }),
   },
   {
-    id: 'birthday', label: 'A birthday invitation', hint: 'You decide if you’re going', source: 'Sample forward', sender: 'Alex',
+    id: 'birthday', label: 'A birthday invitation', hint: 'Added with an INVITATION: label', source: 'Sample forward', sender: 'Alex',
     body: 'Birthday drinks at mine on Saturday 19 September 2026, from eight in the evening. Would love you to come!\n\nAlex’s place, London.',
-    explanation: 'An invitation is a possibility. It becomes a plan when you decide to go.',
+    explanation: 'This appears automatically as INVITATION: Alex’s birthday. Choose I’m going later to remove the label; no RSVP is sent.',
     proposal: suggestion('birthday', { title: 'Alex’s birthday', date: '2026-09-19', time: '20:00', kind: 'social', location: 'Alex’s place, London', detail: 'Birthday drinks. End time not supplied.' }, { source: 'Sample forward', attendance: 'invited', reason: 'The sample is an invitation. Attendance has not been confirmed.' }),
   },
   {
     id: 'missing-date', label: 'A little missing context', hint: '“Tomorrow” needs a date', source: 'Sample forward', sender: 'Sam',
     body: 'See you tomorrow at eight in the evening at Riverside!',
-    explanation: 'The original message date wasn’t included in this forward. Choose the date before making it a plan.',
+    explanation: 'The original message date wasn’t included in this forward. It stays in Needs details until you supply the date.',
     proposal: suggestion('missing-date', { title: 'Dinner with Sam', time: '20:00', kind: 'social', location: 'Riverside', detail: 'The original message date was not supplied.' }, { source: 'Sample forward', attendance: 'unknown', reason: '“Tomorrow” needs the original message date or your clarification.', unresolvedFields: ['date'] }),
   },
   {
     id: 'offer', label: 'A travel offer', hint: 'Some messages can stay out', source: 'Sample email', sender: 'The Weekend Edit',
     body: 'Fancy a September escape?\n\nFlights to Lisbon from £39. Book by 15 September 2026 to see our latest offers.',
-    explanation: 'This is a promotion. There’s no personal booking or agreed plan, so it doesn’t add anything to review.',
+    explanation: 'This is a promotion. There’s no personal booking or agreed plan, so it stays out of the calendar.',
   },
 ];

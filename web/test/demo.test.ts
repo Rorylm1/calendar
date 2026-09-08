@@ -5,34 +5,52 @@ import { resolve } from 'node:path';
 import ts from 'typescript';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import DemoMonth from '../app/demo/demo-month.tsx';
 import DemoForm from '../app/demo/demo-form.tsx';
-import { demoReducer, initialDemoState, validDemoDate, validateDemoFields } from '../app/demo/state.ts';
+import { demoReducer, demoTitle, initialDemoState, validDemoDate, validateDemoFields } from '../app/demo/state.ts';
 import { INITIAL_EVENTS, SAMPLES } from '../app/demo/fixtures.ts';
 import { eventsOnDate, monthCells, timeOnDay } from '../app/demo/dates.ts';
 
-test('fictional dinner flows from message through edited suggestion to exactly one calendar plan', () => {
+test('a dated dinner is added automatically once and remains editable', () => {
   const initial = initialDemoState(); let state = demoReducer(initial, { type: 'capture', sampleId: 'dinner' });
-  assert.equal(state.events.length, 6); assert.equal(state.proposals.length, 1); assert.equal(state.proposals[0]!.source, 'Sample email'); assert.match(state.proposals[0]!.evidence[0]!, /table for four/);
-  const proposal = state.proposals[0]!; const fields = { ...proposal.event, title: 'Dinner with friends', date: '2026-09-18', time: '20:00' };
-  state = demoReducer(state, { type: 'confirm', proposalId: proposal.id, fields, attending: true });
-  assert.equal(state.proposals.length, 0); assert.equal(state.events.length, 7); assert.equal(state.events.at(-1)!.date, fields.date); assert.equal(state.events.at(-1)!.title, fields.title); assert.equal(state.handled.dinner, 'confirmed');
-  assert.equal(demoReducer(state, { type: 'confirm', proposalId: proposal.id, fields, attending: true }), state);
-  assert.equal(demoReducer(state, { type: 'capture', sampleId: 'dinner' }), state); assert.equal(initial.events.length, 6); assert.equal(initial.proposals.length, 0);
+  assert.equal(state.events.length, 7); assert.equal(state.proposals.length, 0); assert.equal(state.handled.dinner, 'added');
+  const event = state.events.at(-1)!; assert.equal(event.attendance, 'confirmed'); assert.equal(event.date, '2026-09-17'); assert.equal(event.source, 'Sample email');
+  state = demoReducer(state, { type: 'edit', eventId: event.id, fields: { ...event, title: 'Dinner with friends', date: '2026-09-18' } });
+  assert.equal(state.events.at(-1)!.id, event.id); assert.equal(state.events.at(-1)!.title, 'Dinner with friends'); assert.equal(state.events.at(-1)!.revision, 2);
+  assert.equal(demoReducer(state, { type: 'capture', sampleId: 'dinner' }), state); assert.equal(initial.events.length, 6);
 });
-test('a birthday invitation needs an explicit attendance decision', () => {
-  const state = demoReducer(initialDemoState(), { type: 'capture', sampleId: 'birthday' }); const proposal = state.proposals[0]!; assert.equal(proposal.attendance, 'invited');
-  const blocked = demoReducer(state, { type: 'confirm', proposalId: proposal.id, fields: proposal.event, attending: false }); assert.match(blocked.error, /Confirm you’re going/); assert.equal(blocked.events.length, 6); assert.equal(blocked.proposals.length, 1);
-  const accepted = demoReducer(state, { type: 'confirm', proposalId: proposal.id, fields: proposal.event, attending: true }); assert.equal(accepted.events.at(-1)!.date, '2026-09-19'); assert.equal(accepted.handled.birthday, 'confirmed');
+test('a birthday is added as an invitation and attendance is reversible without changing identity', () => {
+  let state = demoReducer(initialDemoState(), { type: 'capture', sampleId: 'birthday' }); const event = state.events.at(-1)!;
+  assert.equal(state.proposals.length, 0); assert.equal(event.attendance, 'invited'); assert.equal(event.date, '2026-09-19'); assert.equal(demoTitle(event), 'INVITATION: Alex’s birthday'); assert.equal(event.title, 'Alex’s birthday');
+  state = demoReducer(state, { type: 'attendance', eventId: event.id, attendance: 'confirmed' });
+  assert.equal(demoTitle(state.events.at(-1)!), 'Alex’s birthday'); assert.equal(state.events.at(-1)!.revision, 2);
+  state = demoReducer(state, { type: 'attendance', eventId: event.id, attendance: 'invited' });
+  assert.equal(state.events.at(-1)!.id, event.id); assert.equal(state.events.at(-1)!.revision, 3); assert.equal(demoTitle(state.events.at(-1)!), 'INVITATION: Alex’s birthday');
+  assert.equal(demoReducer(state, { type: 'capture', sampleId: 'birthday' }), state);
+  assert.equal(demoReducer(state, { type: 'attendance', eventId: event.id, attendance: 'invited' }), state);
 });
-test('an unanchored tomorrow stays undated until the visitor supplies a valid date', () => {
-  const state = demoReducer(initialDemoState(), { type: 'capture', sampleId: 'missing-date' }); const proposal = state.proposals[0]!; assert.equal(proposal.event.date, undefined); assert.deepEqual(proposal.unresolvedFields, ['date']);
-  for (const date of ['', 'tomorrow', '2026-02-31', '2026-13-01']) { const invalid = demoReducer(state, { type: 'confirm', proposalId: proposal.id, fields: { ...proposal.event, date }, attending: true }); assert.equal(invalid.events.length, 6); assert.match(invalid.error, /real date/); }
-  const confirmed = demoReducer(state, { type: 'confirm', proposalId: proposal.id, fields: { ...proposal.event, date: '2026-09-20' }, attending: true }); assert.equal(confirmed.events.at(-1)!.date, '2026-09-20');
+test('an unanchored tomorrow needs a real date and completing it does not imply attendance', () => {
+  const state = demoReducer(initialDemoState(), { type: 'capture', sampleId: 'missing-date' }); const proposal = state.proposals[0]!;
+  assert.equal(proposal.event.date, undefined); assert.deepEqual(proposal.unresolvedFields, ['date']); assert.equal(state.events.length, 6);
+  for (const date of ['', 'tomorrow', '2026-02-31', '2026-13-01']) { const invalid = demoReducer(state, { type: 'complete', proposalId: proposal.id, fields: { ...proposal.event, date } }); assert.equal(invalid.events.length, 6); assert.match(invalid.error, /real date/); }
+  const action = { type: 'complete' as const, proposalId: proposal.id, fields: { ...proposal.event, date: '2026-09-20' } };
+  const completed = demoReducer(state, action); assert.equal(completed.events.at(-1)!.attendance, 'invited'); assert.equal(completed.events.at(-1)!.date, '2026-09-20'); assert.equal(completed.proposals.length, 0);
+  assert.equal(demoReducer(completed, action), completed);
+  const confirmed = demoReducer(state, { ...action, fields: { ...action.fields, attendance: 'confirmed' } }); assert.equal(confirmed.events.at(-1)!.attendance, 'confirmed');
 });
-test('promotions create no suggestion and repeated capture or dismiss does not bring handled samples back', () => {
+test('promotions are filtered and dismissed or removed samples do not return on repeated capture', () => {
   let state = demoReducer(initialDemoState(), { type: 'capture', sampleId: 'offer' }); assert.equal(state.handled.offer, 'filtered'); assert.equal(state.proposals.length, 0); assert.equal(state.events.length, 6);
-  state = demoReducer(state, { type: 'capture', sampleId: 'dinner' }); const proposal = state.proposals[0]!; assert.equal(demoReducer(state, { type: 'capture', sampleId: 'dinner' }), state);
-  state = demoReducer(state, { type: 'dismiss', proposalId: proposal.id }); assert.equal(state.handled.dinner, 'dismissed'); assert.equal(state.proposals.length, 0); assert.equal(demoReducer(state, { type: 'capture', sampleId: 'dinner' }), state);
+  state = demoReducer(state, { type: 'capture', sampleId: 'missing-date' }); const proposal = state.proposals[0]!;
+  state = demoReducer(state, { type: 'dismiss', proposalId: proposal.id }); assert.equal(state.handled['missing-date'], 'dismissed'); assert.equal(state.proposals.length, 0); assert.equal(demoReducer(state, { type: 'capture', sampleId: 'missing-date' }), state);
+  state = demoReducer(state, { type: 'capture', sampleId: 'birthday' }); state = demoReducer(state, { type: 'remove', eventId: 'demo-birthday' });
+  assert.equal(state.events.length, 6); assert.equal(state.handled.birthday, 'removed'); assert.equal(demoReducer(state, { type: 'capture', sampleId: 'birthday' }), state);
+});
+test('invitation titles have one display prefix and stay unprefixed when edited', () => {
+  let state = demoReducer(initialDemoState(), { type: 'capture', sampleId: 'birthday' }); const event = state.events.at(-1)!;
+  const fields = { ...event, title: 'INVITATION: invitation: Birthday drinks' }; assert.equal(demoTitle(fields), 'INVITATION: Birthday drinks');
+  state = demoReducer(state, { type: 'edit', eventId: event.id, fields }); assert.equal(state.events.at(-1)!.title, 'Birthday drinks'); assert.equal(state.events.at(-1)!.attendance, 'invited');
+  const markup = renderToStaticMarkup(createElement(DemoForm, { initial: fields, label: 'Save changes', onSave() {} }));
+  assert.match(markup, /value="Birthday drinks"/); assert.match(markup, /<input(?=[^>]*value="invited")(?=[^>]*checked="")[^>]*>/); assert.match(markup, /No RSVP is sent/);
 });
 test('editing and removal preserve identity, and reset fully restores independent fixtures', () => {
   let state = initialDemoState(); const first = state.events[0]!; state = demoReducer(state, { type: 'edit', eventId: first.id, fields: { ...first, title: 'Changed sample', time: '' } });
@@ -40,6 +58,13 @@ test('editing and removal preserve identity, and reset fully restores independen
   state = demoReducer(state, { type: 'remove', eventId: first.id }); assert.equal(state.events.length, 5); state = demoReducer(state, { type: 'capture', sampleId: 'birthday' }); state = demoReducer(state, { type: 'reset' });
   assert.deepEqual(state.events, INITIAL_EVENTS); assert.deepEqual(state.proposals, []); assert.deepEqual(state.handled, {}); assert.equal(state.error, ''); assert.equal(initialDemoState().events[0] === state.events[0], false);
   assert.equal(SAMPLES.find(sample => sample.id === 'missing-date')!.proposal!.event.date, undefined);
+});
+test('month and selected-day markup expose the invitation label without changing kind styling', () => {
+  const state = demoReducer(initialDemoState(), { type: 'capture', sampleId: 'birthday' });
+  const markup = renderToStaticMarkup(createElement(DemoMonth, { events: state.events, year: 2026, month: 8, selected: '2026-09-19', peek: true, onSelect() {}, onPeek() {}, onEvent() {} }));
+  assert.match(markup, /class="event-full">INVITATION: Alex’s birthday/);
+  assert.match(markup, /<strong>INVITATION: Alex’s birthday<\/strong>/);
+  assert.match(markup, /class="calendar-event kind-social /);
 });
 test('date and booking validation preserves absent times and rejects impossible journeys', () => {
   assert.equal(validDemoDate('2028-02-29'), true); assert.equal(validDemoDate('2026-02-29'), false); assert.equal(validDemoDate('0000-01-01'), false);

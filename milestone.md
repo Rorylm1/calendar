@@ -1,6 +1,6 @@
 # Personal calendar — milestones
 
-Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 47 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend and Vercel update are deployed and eight eligible pending items have been applied. Rory chose to pause the recurring TradeR jobs causing memory exhaustion; authenticated calendar checks now pass. Longer-term reliability and iPhone acceptance remain open.
+Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 49 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend and Vercel update are deployed and eight eligible pending items have been applied. Rory chose to pause the recurring TradeR jobs causing memory exhaustion; authenticated calendar checks now pass. Longer-term reliability and iPhone acceptance remain open.
 
 ## Objective
 
@@ -204,14 +204,14 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 ## Milestone 7 — Polish and publish the fictional demo
 
-**Status:** `/demo` is built with scripted fictional examples. Its original 29-test implementation record and review-first walkthrough are historical; the current project web suite has 47 passing tests. The historical demo flow does not define the private app’s automatic-entry policy. Core browser flows and 390/768/1440 px layouts have been checked. Native date-input/device acceptance and Rory’s design review remain open; see [the demo record](docs/demo-implementation.md).
+**Status:** `/demo` now uses scripted automatic booking/invitation addition, exact invitation labels and Needs details. The web suite has 49 passing tests. The original browser layout checks predate this update; new browser interaction checks are blocked by the locked Mac. Native date-input/device acceptance, a full network recording and Rory’s design review remain open; see [the demo record](docs/demo-implementation.md).
 
 **Owners:** Rory + Codex for final design and storytelling; Codex for demo wiring, isolation, verification, and deployment preparation.
 
 - [ ] Polish the designed flows using feedback from private use, including mobile behaviour, accessibility, empty states, and motion.
-- [ ] Update the isolated fictional walkthrough to demonstrate automatic booking/invitation addition and Needs details, matching the current private app while retaining the original design studies. This can proceed without account/device access; keep scripted-data disclosure and isolation tests.
+- [x] Implement the isolated fictional walkthrough with automatic booking/invitation addition and Needs details, matching the private app while retaining original design studies. Scripted-data disclosure, reducer/rendered-form coverage and isolation tests pass; new browser acceptance remains open.
 - [x] Build a separate fictional dataset and demo mode with no live Gmail/WhatsApp connections, personal feed tokens, source messages, or personal records.
-- [x] Preserve the original scripted demo story: a message becomes a suggestion, the user reviews it, and it appears on the calendar. This is a historical demonstration of the earlier review-first flow, not the current private-app policy.
+- [x] Replace the historical review-first demo story: valid dated items appear directly, while only incomplete items wait for details. Attendance is a separate reversible choice.
 - [x] Verify demo isolation with runtime import/capability tests, production connection restrictions, generated-asset secret checks and unauthenticated API rejection. A full browser network recording remains a separate acceptance check.
 - [x] Prepare the public deployment and [a short walkthrough](docs/demo-implementation.md#short-walkthrough) describing scripted examples and deliberate limits. Rory decides when it is ready to share.
 
