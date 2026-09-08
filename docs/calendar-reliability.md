@@ -32,3 +32,13 @@ After installation, verify authenticated state reads through the production fron
 Using the same reviewed source files, run `sudo python3 install-calendar-resources.py --remove`. It removes only byte-identical files owned by this setup, reloads systemd and restarts only the two calendar services into their original system slice. A failed application attempts to restore the previous files and service placement automatically. Never use a broad `systemctl revert` or restart the unrelated proxy to undo this change.
 
 No production data restore is required for either application or rollback. The separate online backup timer and [backup recovery procedure](backup-recovery.md) remain unchanged.
+
+## Identified recurring workload — 8 September, 09:28 UTC
+
+A fresh host check after recovery showed 652 MiB in use out of 3819 MiB, 3167 MiB available and no swap. Calendar API memory was about 113 MiB and its dedicated HTTPS proxy about 18 MiB. The low-load calendar is small relative to the host.
+
+Kernel logs identify global out-of-memory kills in `rory-trader-settlement.service` at 08:12 and 09:12 UTC and `rory-trader-paper-session.service` at 08:17 UTC. Each killed Python process held roughly 3.2 GiB of anonymous resident memory. Other runs exhausted their five-minute timeouts. Paper sessions run every 15 minutes and settlement every 30 minutes; both have unlimited service memory limits. These repeating jobs explain the recovery/stall cycle much more specifically than the earlier contention hypothesis.
+
+The live TradeR journal is 773,790,841 bytes (about 738 MiB). Its journal loader builds a Python list containing every JSON record. Proposal existence checks call that full loader, while settlement builds the full journal/accounting summary before applying the position limit. Python objects, copied records and data frames can expand substantially beyond the file size. This is a concrete memory-growth mechanism in the inspected code; no heap profile or controlled reproduction has yet established its exact share of peak allocation.
+
+Recommended order: put the research jobs in a shared bounded memory budget, with job-specific failure reporting; replace repeated full-journal loads with indexed incremental reads and a compact open-position projection; then measure peak memory and calendar latency during normal scheduled work. A shared lock can prevent overlap but does not fix a single oversized run. Keep the append-only history as an audit trail without loading it for every operational lookup. Compressed swap is secondary headroom, not a cure for repeatedly rebuilding an ever-growing history. No TradeR job, schedule, trading data, swap setting or server capacity was changed during this investigation.

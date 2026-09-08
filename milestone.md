@@ -1,6 +1,6 @@
 # Personal calendar — milestones
 
-Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 47 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; deploying this update and applying eligible existing pending items remain open.
+Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 47 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend is deployed and eight eligible pending items have been applied; Vercel production verification is the remaining rollout step.
 
 ## Objective
 
@@ -157,7 +157,7 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [x] Prefix invitation display/export titles exactly once with `INVITATION: `; I’m going removes the prefix without sending an RSVP.
 - [x] Keep the existing private feed URL and include both statuses with the same calendar colour; invitations are tentative/free and alarm-free.
 - [x] Adapt optional grouped alerts to calendar updates and missing-detail exceptions; preserve opt-in and quiet hours.
-- [ ] Back up and apply eligible existing pending items without rescanning Gmail or rerunning models.
+- [x] Back up and apply eligible existing pending items without rescanning Gmail or rerunning models. Eight items added, all 15 prior events preserved, eight factual exceptions retained, existing feed link and push preferences unchanged.
 - [x] Test the combined lifecycle: 140 backend tests and 47 web tests pass; fictional browser flows for automatic addition, invitation acceptance and missing-detail correction passed. Independent backend regression review found no remaining blocker in its checked scope.
 - [ ] Deploy the automatic-entry update to the backend and Vercel app, then verify the hosted flow.
 - [ ] Verify actual iPhone refresh, labels and invitation/reminder behaviour with Rory.
