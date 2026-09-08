@@ -1,6 +1,6 @@
 # WhatsApp forwarding spike
 
-Research checked **7 September 2026**. **A real iPhone → Meta → calendar delivery test is still pending.** Meta’s callback and test-account subscriptions are configured; this document distinguishes setup verification from real phone delivery.
+Research checked **7 September 2026**. **A real iPhone → Meta → private receiver delivery passed on 8 September 2026.** Meta’s callback and test-account subscriptions are configured; this document distinguishes setup verification from real phone delivery.
 
 ## Objective and decision
 
@@ -20,7 +20,7 @@ Dashboard user access tokens expire after 24 hours. Meta also supports system-us
 
 ## Receiver contract
 
-The backend spike was deployed disabled on 7 September 2026 after 66 backend tests passed. On 8 September it was enabled for the verified owner and Meta test receiving number, and Meta verified the callback. Real phone delivery remains pending. The contract is:
+The backend spike was deployed disabled on 7 September 2026 after 66 backend tests passed. On 8 September it was enabled for the verified owner and Meta test receiving number, and Meta verified the callback. Real forwarded text delivery passed on 8 September. The contract is:
 
 - Public callback (replace the example origin with the private `CALENDAR_BACKEND_ORIGIN`): `https://your-calendar-service.example/webhooks/whatsapp`. GET verification compares `hub.verify_token` with the private configured value before returning `hub.challenge` for a subscription request.
 - POST requests require `X-Hub-Signature-256`, checked as HMAC-SHA256 over the **raw body** using the Meta app secret. The verification token and app secret serve different purposes.
@@ -44,20 +44,21 @@ Do not retain the old blanket “a fresh SIM is required” assumption. Meta has
 
 If the test receiver proves unsuitable for ongoing use under the no-extra-number constraint, prefer a capture form with pasted text. An iPhone Shortcut could reduce those steps after a device test. WhatsApp's documented iPhone Share Extension concerns sharing **into WhatsApp**; it does not establish that selected text can be shared out to our app or a Shortcut. [WhatsApp's iPhone integration guide](https://faq.whatsapp.com/425247423114725/?cms_platform=iphone).
 
-## Acceptance record — pending
+## Acceptance record
 
 - [x] Meta offers a test receiver without another owned number or a purchase.
-- [ ] The existing personal phone verifies and forwards text successfully.
-- [ ] Genuine signed delivery appears once in the private inbox; an unapproved sender cannot create a capture.
-- [ ] Actual forward/reply metadata is recorded without assuming missing context.
-- [ ] Receiving still works with the app browser closed and after the dashboard token expires; any required long-lived asset/token access is demonstrated.
+- [x] The existing personal phone verifies and forwards text successfully.
+- [x] Genuine signed delivery appears once in the private inbox; synthetic tests separately verify unapproved sender exclusion.
+- [x] Actual forward metadata is recorded: forwarded=true, original sender/date absent, no reply context on this sample. A real reply remains untested.
+- [x] A real incoming forward was captured after the dashboard access token had expired.
+- [ ] Verify receiving with the browser closed and longer unattended operation; demonstrate any long-lived access needed for future outbound/API actions.
 - [ ] The user finds forwarding convenient enough to keep. If not, choose the no-number capture alternative before expanding WhatsApp work.
 
 Source limitation: Meta's developer pages repeatedly returned HTTP 429. Accessible Meta-maintained Postman references and the official WhatsApp pricing/help pages support the facts above; unverified dashboard, Coexistence and long-term test-asset behavior remain explicitly pending. No real message, credential or business identity has been stored in this document.
 
 ## Account onboarding progress — 8 September 2026
 
-Rory completed developer registration, created the Rory Calendar business portfolio and app, and accepted the WhatsApp setup terms. The dashboard provisioned a Meta test phone number and displayed a five-recipient test limit. No owned receiving number or SIM was purchased or registered. The existing personal phone completed recipient verification and is selected in the test dashboard. Rory approved test-account access and the final Business Tools agreement. A temporary access token was generated for the current test account only. The dashboard reported that the one approved sample message was sent; handset delivery has not yet been confirmed. Rory completed the password re-entry check. The signing secret and receiver settings were saved in ignored server `.env` files with owner-only local permissions; the temporary access token stays local. Only the four receiving settings were added to the protected live environment, with a private rollback copy. The calendar service was restarted, its database identity and existing environment values were preserved, and the shared proxy was unchanged. Meta verified the callback and reports an active `messages` subscription (v26.0), with Rory Calendar subscribed to the test WABA alongside Meta’s existing dashboard app. The first real forward remains pending. Test-number provisioning alone does not establish inbound delivery or permanent availability.
+Rory completed developer registration, created the Rory Calendar business portfolio and app, and accepted the WhatsApp setup terms. The dashboard provisioned a Meta test phone number and displayed a five-recipient test limit. No owned receiving number or SIM was purchased or registered. The existing personal phone completed recipient verification and is selected in the test dashboard. Rory approved test-account access and the final Business Tools agreement. A temporary access token was generated for the current test account only. The dashboard reported that the one approved sample message was sent; handset delivery has not yet been confirmed. Rory completed the password re-entry check. The signing secret and receiver settings were saved in ignored server `.env` files with owner-only local permissions; the temporary access token stays local. Only the four receiving settings were added to the protected live environment, with a private rollback copy. The calendar service was restarted, its database identity and existing environment values were preserved, and the shared proxy was unchanged. Meta verified the callback and reports an active `messages` subscription (v26.0), with Rory Calendar subscribed to the test WABA alongside Meta’s existing dashboard app. The first real forward was still pending at that point; the successful capture is recorded below. Test-number provisioning alone does not establish inbound delivery or permanent availability.
 
 A bounded server check found the calendar service active, the receiver correctly disabled (HTTP 404), and zero current memory-pressure averages. The normal calendar and unrelated workloads were unchanged. Account identifiers and the intended sender restriction are saved only in ignored local operations data.
 
@@ -71,8 +72,16 @@ Rory reported sending the requested real forward. The private receiver still rep
 
 The dashboard explicitly says unpublished apps receive dashboard tests only and do not receive production data, including from admins, developers, or testers. The Publish checklist listed a missing privacy-policy URL. The existing public privacy page was updated with accurate WhatsApp test capture, metadata, retention and current controls; build, typecheck and all 49 frontend tests passed, and Vercel deployed commit `11d9491` successfully. The published privacy content was verified anonymously.
 
-Meta’s privacy and deletion-information fields are being set to that public page; the unrelated default Terms of Service URL is being cleared. These form changes are **not yet saved or verified**. Native browser access stopped because the Mac locked. On resumption, inspect the exact field values again before saving: the user’s concurrent clipboard use changed one paste destination during setup. Do not assume the unsaved data-deletion field is correct. The Meta app remains unpublished; review its remaining requirements before making any publication decision. No additional WhatsApp message was sent by the app.
+Setup briefly paused when the Mac locked. After unlocking, the privacy and deletion-information fields were checked against the exact public calendar URL before saving, and the unrelated default Terms of Service URL was cleared. No additional WhatsApp message was sent by the app.
 
-After the Mac was unlocked, both privacy/deletion-information URLs were checked and saved to the calendar’s public privacy page, and the unrelated Terms of Service default was cleared. Meta displayed “Changes saved”; its authenticated app API independently confirmed the exact privacy-policy URL. The publishing checklist initially remained disabled and then showed a loading state on direct navigation. Publication and real inbound delivery are still pending; do not assume a successful dashboard test establishes either.
+After the Mac was unlocked, both privacy/deletion-information URLs were checked and saved to the calendar’s public privacy page, and the unrelated Terms of Service default was cleared. Meta displayed “Changes saved”; its authenticated app API independently confirmed the exact privacy-policy URL. The publishing checklist initially remained disabled and then showed a loading state on direct navigation. Publication and real inbound delivery were still pending at that point; their subsequent results are recorded below. A successful dashboard test alone does not establish either.
 
-The publishing checklist subsequently finished loading and explicitly reported all required app settings complete, with Publish enabled. Publishing is awaiting Rory’s approval because the earlier grant covered the test connection.
+The publishing checklist subsequently finished loading and explicitly reported all required app settings complete. Rory approved publishing, Publish was clicked, and Meta’s sidebar status changed to **Published**. A fresh forward has been requested to test delivery after publication; the earlier pre-publication message was not captured.
+
+## Successful real forward — 8 September 2026
+
+Rory clarified that the earlier messages went to the wrong number, then forwarded a text to the configured Meta test number. The protected receiver captured **one text message**, counted **one forward**, and recorded zero unsupported messages. Receipt occurred at 21:57 UTC. The message has a provider ID and `forwarded=true`; original sender/date and reply context are absent. No personal message text or identifier is included here. Real acceptance means the deployed signature and owner/receiving-number checks passed before encrypted storage. The observed inbox has one record; provider redelivery was not forced, so live retry deduplication remains covered by the existing synthetic tests rather than a claimed live replay.
+
+The wrong-number correction means the earlier missing captures cannot be attributed to unpublished-app behavior. Meta did document a publishing restriction, and publication was approved and completed, but the attempted pre-publication forward was not a valid test of it.
+
+Meta had already rejected the temporary setup token as expired before the successful incoming capture. This demonstrates that this configured inbound subscription continued working after that token’s expiry; it does not establish permanent test-number availability. Capture stops at the encrypted inbox: no model processing, calendar creation or reply was triggered. The next implementation step is milestone 5’s interpretation and automatic calendar entry with explicit INVITATION: titles and Needs details for missing facts. Long unattended operation and the browser-closed test remain open.

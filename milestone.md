@@ -1,6 +1,6 @@
 # Personal calendar — milestones
 
-Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 49 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend and Vercel update are deployed and eight eligible pending items have been applied. Rory chose to pause the recurring TradeR jobs causing memory exhaustion; authenticated calendar checks now pass. Longer-term reliability and iPhone acceptance remain open.
+Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 49 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; one genuine WhatsApp forward is captured, while WhatsApp interpretation and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend and Vercel update are deployed and eight eligible pending items have been applied. Rory chose to pause the recurring TradeR jobs causing memory exhaustion; authenticated calendar checks now pass. Longer-term reliability and iPhone acceptance remain open.
 
 ## Objective
 
@@ -8,7 +8,7 @@ Build a beautiful personal calendar that turns forwarded WhatsApp messages and G
 
 ## Current sequence — automatic entry and labelled invitations
 
-The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has authorized continued milestone work while away. The official WhatsApp test receiver is enabled for the verified owner; Meta has verified the callback and active message/test-account subscriptions. The dashboard sent the one authorized sample message. Real inbound forwarding and unattended operation remain to be demonstrated under the no-extra-owned-number constraint. The private ICS feed, installable app and opt-in grouped alerts are implemented. Device delivery and real-mail quality acceptance remain open. Rory’s 8 September instruction authorizes automatic addition, including eligible existing pending items. Missing or conflicting facts still require input. This supersedes the earlier restriction against applying real suggestions; preserve owner edits, explicit dismissals/deletions, credentials and subscription preferences.
+The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has authorized continued milestone work while away. The official WhatsApp test receiver is enabled for the verified owner; Meta has verified the callback and active message/test-account subscriptions. The dashboard sent the one authorized sample message. One genuine forward reached the signed receiver and encrypted inbox after publication, including after the temporary token expired. Longer unattended operation remains to be demonstrated under the no-extra-owned-number constraint. The private ICS feed, installable app and opt-in grouped alerts are implemented. Device delivery and real-mail quality acceptance remain open. Rory’s 8 September instruction authorizes automatic addition, including eligible existing pending items. Missing or conflicting facts still require input. This supersedes the earlier restriction against applying real suggestions; preserve owner edits, explicit dismissals/deletions, credentials and subscription preferences.
 
 - [x] Build and review visual alternatives; select Edge as the working direction.
 - [x] Implement the Edge personal app, encrypted persistent calendar/review data, and owner-restricted API bridge; preserve the original ten design studies.
@@ -50,7 +50,7 @@ Rory directs the design with Codex implementing it. Edge is the current visual r
 | 6. Prove everyday reliability | Private version that survives failures and is useful in daily use | Milestones 3–5 |
 | 7. Publish the showcase | Polished public demo with fictional data | Stable interface and isolation verified; personal-use feedback informs polish |
 
-The milestone numbers identify work areas, not the current execution order. The calendar foundation and Gmail are deployed; current work advances calendar delivery and reliability while WhatsApp account access is pending. The WhatsApp proof remains timeboxed to one evening when resumed. Milestones are defined by working outcomes rather than speculative dates; Rory's design review can proceed alongside backend and account setup.
+The milestone numbers identify work areas, not the current execution order. The calendar foundation and Gmail are deployed; WhatsApp account setup and one real forward are verified; current work can advance WhatsApp interpretation alongside calendar delivery and reliability. Long-term test-number suitability remains an acceptance check. Milestones are defined by working outcomes rather than speculative dates; Rory's design review can proceed alongside backend and account setup.
 
 ## Milestone 1 — Prove the official WhatsApp receiver
 
@@ -60,12 +60,12 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 - [x] Build and deploy the minimal signed webhook in its disabled state with a separate encrypted spike inbox; 13 new tests cover authentication, allowlists, replay, persistence and limits.
 - [x] Obtain the Meta-provided test receiver, verify the owner’s existing phone, and configure Meta’s callback and message subscriptions.
-- [ ] Complete a real delivery check from the owner’s phone. The first reported forward did not appear; Meta’s signed dashboard delivery passed. The unpublished-app restriction and publishing checklist are the current blocker (see spike record).
-- [ ] Forward an actual text message from Rory's normal WhatsApp account and inspect the content and context delivered.
+- [x] Complete a real delivery check from the owner’s phone. One forwarded text was captured once after publication; prior attempts were sent to the wrong number. Meta’s signed dashboard delivery also passed.
+- [x] Forward an actual text message from Rory's normal WhatsApp account and inspect the delivered metadata without exposing its content.
 - [x] Verify webhook authentication and sender/receiver restrictions with synthetic payloads.
-- [ ] Verify the actual Meta signature and sender restriction with a real forward.
+- [x] Verify the actual Meta signature and configured sender/receiving-number checks with a real forward.
 - [ ] Establish test-receiver availability, real inbound delivery and unattended operation under the no-extra-owned-number constraint. Document production-number and eligibility requirements as limits, not as an approved purchase or migration.
-- [ ] Record missing context, particularly original sender/date and surrounding conversation.
+- [x] Record missing context: this actual forward contains no original sender/date, surrounding conversation or reply context.
 - [ ] Stop after the timebox and record either a workable route or the specific unresolved setup issue. Continue independent calendar/Gmail work if onboarding remains blocked.
 
 **Done when:** A real forward reaches the official webhook and the ongoing-use path fits the no-extra-owned-number constraint, or a clear incompatibility is recorded for a product decision. If this cannot be demonstrated, leave the milestone incomplete with a clear finding; do not substitute Baileys or a personal-account scraping connection.
