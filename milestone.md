@@ -1,6 +1,6 @@
 # Personal calendar — milestones
 
-Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 47 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend is deployed and eight eligible pending items have been applied; Vercel production verification is the remaining rollout step.
+Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 47 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend and Vercel update are deployed and eight eligible pending items have been applied. Recurring TradeR memory exhaustion still causes intermittent hosted API failures; reliability acceptance remains open.
 
 ## Objective
 
@@ -159,7 +159,8 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [x] Adapt optional grouped alerts to calendar updates and missing-detail exceptions; preserve opt-in and quiet hours.
 - [x] Back up and apply eligible existing pending items without rescanning Gmail or rerunning models. Eight items added, all 15 prior events preserved, eight factual exceptions retained, existing feed link and push preferences unchanged.
 - [x] Test the combined lifecycle: 140 backend tests and 47 web tests pass; fictional browser flows for automatic addition, invitation acceptance and missing-detail correction passed. Independent backend regression review found no remaining blocker in its checked scope.
-- [ ] Deploy the automatic-entry update to the backend and Vercel app, then verify the hosted flow.
+- [x] Deploy the automatic-entry update to the backend and Vercel app. Backend/feed checks passed and the production page serves the new interface.
+- [ ] Verify sustained hosted API responsiveness during scheduled TradeR jobs: the latest production state read returned 503 under renewed host pressure.
 - [ ] Verify actual iPhone refresh, labels and invitation/reminder behaviour with Rory.
 
 **Done when:** A new confirmed booking appears directly; an unaccepted invitation appears as INVITATION: … in the web app and existing feed; accepting it removes the prefix with stable identity. Invalid or conflicting facts remain actionable rather than fabricated. Actual iPhone acceptance stays open until observed.
