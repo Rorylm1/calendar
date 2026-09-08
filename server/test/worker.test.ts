@@ -75,6 +75,49 @@ test('a decline creates no event, while an unaccepted invitation remains a propo
   await worker.process(); assert.equal(store.proposals()[0]!.attendance, 'invited'); assert.equal(store.events().length, 0);
   store.capture(source('decline')); const declining = new CalendarWorker(config, store, () => provider(), interpreter(output(fields(), { attendance: 'declined' }))); await declining.process(); assert.equal(store.proposals().length, 1); store.close();
 });
+test('zero-second model times become minute precision without confirming the event', async () => {
+  const { config, store } = fixture(); store.capture(source());
+  const result = output(fields()); result.proposals[0]!.event.time = '19:30:00'; result.proposals[0]!.event.endTime = '21:00:00';
+  const worker = new CalendarWorker(config, store, () => provider(), interpreter(result));
+  await worker.process();
+  assert.equal(store.counts().failedMessages, 0); assert.equal(store.counts().pendingMessages, 0); assert.equal(store.events().length, 0);
+  const item = store.proposals()[0]!; assert.equal(item.event.time, '19:30'); assert.equal(item.event.endTime, '21:00'); assert.equal(item.status, 'pending'); store.close();
+});
+test('nonzero seconds and invalid clock values are never silently truncated', async () => {
+  for (const [field, value] of [['time', '19:30:01'], ['time', '24:30:00'], ['time', '19:60:00'], ['time', '19:30:000'], ['endTime', '21:00:30'], ['endTime', '25:00:00']] as const) {
+    const { config, store } = fixture(); store.capture(source()); const result = output(fields()); result.proposals[0]!.event[field] = value;
+    const worker = new CalendarWorker(config, store, () => provider(), interpreter(result)); await worker.process();
+    assert.equal(store.counts().failedMessages, 1, `${field}=${value}`); assert.equal(store.proposals().length, 0); assert.equal(store.events().length, 0); store.close();
+  }
+});
+test('evidence-backed unmatched changes stay reviewable without inventing a target or allowing confirmation', async () => {
+  const { config, store } = fixture(); const unrelated = store.createEvent(fields({ title: 'A different existing plan', date: '2026-10-01' })); store.capture(source());
+  const cancellation = output(fields(), { action: 'cancel', targetEventId: null, attendance: 'declined', unresolvedFields: [] }).proposals[0]!;
+  const update = output(fields({ title: 'Unmatched booking change', time: '20:00' }), { action: 'update', targetEventId: 'invented-model-target', unresolvedFields: [] }).proposals[0]!;
+  const worker = new CalendarWorker(config, store, () => provider(), interpreter({ proposals: [cancellation, update] })); await worker.process();
+  assert.equal(store.counts().failedMessages, 0); assert.equal(store.counts().pendingMessages, 0); assert.equal(worker.processingStatus, 'idle');
+  assert.equal(store.proposals().length, 2);
+  for (const item of store.proposals()) {
+    assert.equal(item.status, 'pending'); assert.equal(item.targetEventId, undefined); assert.equal(item.targetRevision, undefined); assert.deepEqual(item.unresolvedFields, ['targetEventId']);
+    assert.throws(() => store.confirm(item.id), /Choose the existing event/);
+    assert.throws(() => store.confirm(item.id, { title: 'Attempt to bypass the missing match' }, unrelated.revision), /Choose the existing event/);
+  }
+  assert.deepEqual(store.events(), [unrelated]); assert.ok(store.proposals().every(item => item.status === 'pending')); store.close();
+});
+test('unmatched proposals still require verifiable source evidence', async () => {
+  const { config, store } = fixture(); store.capture(source());
+  const worker = new CalendarWorker(config, store, () => provider(), interpreter(output(fields(), { action: 'cancel', targetEventId: null, evidence: ['Invented cancellation absent from the source'] })));
+  await worker.process(); assert.equal(store.counts().failedMessages, 1); assert.equal(store.proposals().length, 0); assert.equal(store.events().length, 0); store.close();
+});
+test('matched cancellations may retain declined or unknown attendance and still require explicit approval', async () => {
+  for (const attendance of ['declined', 'unknown'] as const) {
+    const { config, store } = fixture(); const event = store.createEvent(fields()); store.capture(source());
+    const worker = new CalendarWorker(config, store, () => provider(), interpreter(output(fields(), { action: 'cancel', targetEventId: event.id, attendance })));
+    await worker.process(); assert.equal(store.counts().failedMessages, 0); assert.equal(store.events().length, 1);
+    const item = store.proposals()[0]!; assert.equal(item.attendance, attendance); assert.equal(item.targetEventId, event.id); assert.equal(item.targetRevision, 1);
+    store.confirm(item.id); assert.equal(store.events().length, 0); store.close();
+  }
+});
 test('detached text bodies are fetched and interpreted instead of disappearing', async () => {
   const { config, store } = fixture(); const connected = connection(); const message = mail(); message.payload!.body = { attachmentId: 'detached-body', size: 120 };
   const gmail = provider({ message: async () => message, attachment: async () => 'Your table at Luca is confirmed for 8 September 2026 at 19:30.' });

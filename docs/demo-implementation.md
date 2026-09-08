@@ -1,6 +1,6 @@
-# Fictional interactive demo — implementation plan
+# Fictional interactive demo
 
-Prepared 7 September 2026 after inspecting the current Edge calendar, its styles and the earlier design studies. **Plan only: `/demo` has not been built or published.** Rory reviews the finished demo before deciding when to share it.
+Implemented 8 September 2026 using the existing Edge visual direction. `/demo` is a standalone, fictional, interactive example. Rory reviews the result before deciding when to share it. This record describes the implementation and the remaining acceptance work.
 
 ## Objective
 
@@ -8,9 +8,9 @@ Let someone understand the project in a minute: select a fictional message, see 
 
 Keep the approved Edge visual direction: dark slate, restrained mint accents, fine calendar rules, a narrow rail and a dismissible day-detail panel. This is an interactive product example, not another design comparison screen.
 
-## Recommended implementation
+## Implementation
 
-Add an independent `/demo` route and a small client controller driven by an in-memory reducer. Reuse existing `Button`, `Dialog`, `Input` and `Textarea` primitives, the layout's fonts, Edge classes in `globals.css`/`iterations.css`, and the presentation rules in `calendar/calendar.css`. Use type-only imports of `EventFields`, `CalendarEvent` and `Proposal` where useful; these contain no runtime integration code.
+The independent `/demo` route uses a small client controller driven by an in-memory reducer. Reuse existing `Button`, `Dialog`, `Input` and `Textarea` primitives, the layout's fonts, Edge classes in `globals.css`/`iterations.css`, and the presentation rules in `calendar/calendar.css`. Use type-only imports of `EventFields`, `CalendarEvent` and `Proposal` where useful; these contain no runtime integration code.
 
 **Leave the personal calendar controller unchanged.** `calendar-client.tsx` combines rendering with API refreshes, Google connections, authentication, notification teardown and delivery settings. Mounting it with a `demo` flag would put the public experience near those effects. Copying the full component would also create a second large application to maintain.
 
@@ -43,14 +43,14 @@ The demo may import UI primitives, pure date helpers, type definitions and its o
 
 The root layout currently loads fonts/styles without reading an account; `/calendar` performs its own owner check. `/demo/page.tsx` can therefore render without opening private services. Keep the demo wordmark pointed at `/demo`, and omit personal-calendar/sign-in links that might prefetch. The existing root-scoped notification worker has no fetch handler or private cache; the demo must not register, modify or unsubscribe it.
 
-For the production demo response, the routing owner can add a narrowly scoped `connect-src 'none'; form-action 'none'; object-src 'none'` policy after checking hydration and assets. This is defence in depth, not a substitute for a clean import graph and verified network behaviour. Do not change the personal route's policy or authentication.
+The production `/demo` response includes `connect-src 'none'; form-action 'none'; object-src 'none'; worker-src 'none'; base-uri 'self'`. Hydration and assets work with this policy. This is defence in depth, not a substitute for a clean import graph and verified network behaviour. Do not change the personal route's policy or authentication.
 
 ## File ownership and sequence
 
 | Owner | Files and responsibility |
 | --- | --- |
 | Demo implementation agent | New `web/app/demo/page.tsx`, `demo-client.tsx`, `demo-month.tsx`, `demo.css`; compose the isolated interface and responsive controls. |
-| Same agent, or a coordinated reducer agent | New `web/lib/demo/fixtures.ts`, `state.ts`, and `web/test/demo.test.ts`; fictional scenarios, deterministic transitions, validation and tests. Freeze their exported contract before parallel UI work. |
+| Same agent, or a coordinated reducer agent | New `web/app/demo/fixtures.ts`, `state.ts`, `dates.ts`, and `web/test/demo.test.ts`; fictional scenarios, deterministic transitions, validation and tests. Freeze their exported contract before parallel UI work. |
 | Root | Optional `/demo` response-header change in `web/next.config.ts`, final browser verification, deployment preparation and documentation. |
 
 No initial changes to `calendar-client.tsx`, live API routes, auth, backend, environment files or the research prototypes. No new runtime dependency is needed. Build fixtures/reducer first, then the demo components, then verify responsive and isolation behaviour. Prepare a reviewable preview; public sharing remains Rory's decision.
@@ -67,3 +67,17 @@ No initial changes to `calendar-client.tsx`, live API routes, auth, backend, env
 - [ ] No personal data, feed URLs, subscriptions or credentials appear in initial HTML, assets or errors. Static import review finds none of the prohibited integration modules.
 - [ ] No browser storage, notification permission or service-worker registration changes occur. Automated reducer tests and the existing web checks pass.
 - [ ] The existing personal calendar still authenticates, renders and edits correctly. The finished preview and a short honest walkthrough are ready for Rory's review; publication is not claimed by this plan.
+
+## Verification on 8 September
+
+All 29 web tests and the production build pass. The demo tests cover exactly-once sample confirmation, explicit invitation acceptance, missing-date validation, advertising exclusion, editing, dismissal, removal, reset, calendar/date handling and the runtime import boundary. An independent review found and fixed hotel checkout clearing and focus restoration after deleting the event that opened a dialog. Hotel checkout stays editable and is required for the demonstration's stay fixtures.
+
+Browser checks observed dinner sample → edited title → confirmation on the correct date; invitation acceptance; undated-forward confirmation blocked; dismissal; and advertising producing no suggestion. The layouts were checked at 390, 768 and 1440 pixels without horizontal overflow. Fictional-data disclosure stayed visible, and the browser reported no console warnings/errors during these flows. This is responsive browser testing, not physical iPhone acceptance.
+
+The browser automation's native date-entry actions did not commit a changed date reliably. Missing-date completion and checkout correction are covered by reducer/rendered-form tests; native input/device acceptance remains open. A complete network recording was not captured; isolation evidence consists of the static import/capability test, unauthenticated page access, clean browser console and the enforced production connection policy. The private review UI was separately checked with an in-memory unmatched cancellation: it displays a clear notice and no confirmation/removal action.
+
+## Short walkthrough
+
+Open `/demo`, choose **Try a message**, then **A dinner booking**. Create the suggestion, edit its title if you wish, and add it to the month. Try the birthday invitation to see the explicit attendance decision, or the travel offer to see why an advert stays out. **Reset** restores the six original fictional plans. The examples are scripted and remain only in memory; they do not demonstrate a live WhatsApp connection or perform live model inference.
+
+Final-build checks also verified hotel title editing, removal restoring keyboard focus to the persistent Try a message button, and Reset restoring the initial dataset. An unauthenticated HTTP request serves `/demo` with its restrictive connection policy, while the personal state API returns 401. Generated public assets were checked against the configured live web secrets and contained none of those values.

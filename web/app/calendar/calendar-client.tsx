@@ -546,7 +546,9 @@ export default function CalendarClient() {
         : modal === 'proposal'
           ? proposal?.action === 'update'
             ? 'Review this change'
-            : 'Make it a plan'
+            : proposal?.action === 'cancel'
+              ? 'Review this cancellation'
+              : 'Make it a plan'
           : modal === 'add'
             ? 'Add a plan'
             : modal === 'edit'
@@ -1119,7 +1121,7 @@ export default function CalendarClient() {
                     </details>
                     {item.unresolvedFields.length > 0 && (
                       <p className="proposal-unresolved">
-                        To check: {item.unresolvedFields.join(', ')}
+                        To check: {item.unresolvedFields.map(field => field === 'targetEventId' ? 'matching saved plan' : field).join(', ')}
                       </p>
                     )}
                     <div className="suggestion-actions">
@@ -1186,7 +1188,32 @@ export default function CalendarClient() {
                   <blockquote key={i}>{text}</blockquote>
                 ))}
               </details>
-              {proposal.action === 'cancel' ? (
+              {proposal.action !== 'create' && (!proposal.targetEventId || proposal.targetRevision === undefined) ? (
+                <div className="cancel-review">
+                  <h3>{proposal.event.title}</h3>
+                  <p>{eventWhen(proposal.event)}</p>
+                  <p>
+                    We couldn’t match this {proposal.action === 'cancel' ? 'cancellation' : 'change'} to a saved plan.
+                    Your calendar hasn’t been changed.
+                  </p>
+                  <p>
+                    Check your calendar and the source details. You can leave
+                    this notice here or dismiss it once you’ve checked.
+                  </p>
+                  <div className="personal-actions">
+                    <Button className="primary-action" onClick={() => setModal('review')} disabled={busy}>
+                      Back to review
+                    </Button>
+                    <Button variant="ghost" className="quiet-action" disabled={busy} onClick={() => void act(async () => {
+                      await api(`proposals/${proposal.id}/dismiss`, 'POST', {});
+                      setModal('review');
+                      setNotice('Notice dismissed.');
+                    })}>
+                      Dismiss notice
+                    </Button>
+                  </div>
+                </div>
+              ) : proposal.action === 'cancel' ? (
                 <div className="cancel-review">
                   <h3>{proposal.event.title}</h3>
                   <p>{eventWhen(proposal.event)}</p>

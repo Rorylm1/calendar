@@ -1,6 +1,6 @@
 # Personal calendar — milestones
 
-Updated: 7 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 112 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in review alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Real suggestions are available in Review.
+Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 117 backend tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in review alerts are implemented; actual WhatsApp forwarding and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Real suggestions are available in Review.
 
 ## Objective
 
@@ -176,7 +176,7 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [ ] Preserve and verify an independent recovery copy of the encryption key and rehearse complete application/provider recovery; isolated database verification alone does not establish this.
 - [ ] Use the app privately for an initial week and record missed relevant items, irrelevant suggestions, correction effort, and measured running cost.
 - [x] Build a labelled set of 50 synthetic examples with an offline validator, field scorer and guarded model runner. Cases cover all major bookings, receipts, adverts, attendance, changes and duplicates; labels and scenario IDs stay out of model input.
-- [ ] Measure the 50-case model baseline, inspect mismatches and track precision/recall including triage misses. Synthetic coverage does not establish real-mail accuracy.
+- [x] Measure the 50-case model baseline and inspect every mismatch: 92 calls cost $0.2470869, with no relevant triage misses. Preserve the strict raw score and distinguish label ambiguity from processing failures in [the baseline report](docs/evaluation-baseline-2026-09-07.md). Synthetic coverage does not establish real-mail accuracy.
 - [ ] Fix failures that cause lost messages, duplicate events, invented details, unapproved writes, or misleading reminder behaviour before calling the private version dependable.
 - [x] Keep grouped review push opt-in, baseline existing suggestions, use overnight quiet hours and expose an off switch. Actual review habits and device delivery remain to be evaluated; no event-reminder fallback has been added.
 
@@ -184,13 +184,15 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 ## Milestone 7 — Polish and publish the fictional demo
 
+**Status:** `/demo` is built with scripted fictional examples and 29 passing web tests. Core browser flows and 390/768/1440 px layouts have been checked. Native date-input/device acceptance and Rory’s design review remain open; see [the demo record](docs/demo-implementation.md).
+
 **Owners:** Rory + Codex for final design and storytelling; Codex for demo wiring, isolation, verification, and deployment preparation.
 
 - [ ] Polish the designed flows using feedback from private use, including mobile behaviour, accessibility, empty states, and motion.
-- [ ] Build a separate fictional dataset and demo mode with no live Gmail/WhatsApp connections, personal feed tokens, source messages, or personal records.
-- [ ] Demonstrate the story end to end: a message or booking becomes a suggestion, the user reviews it, and it appears on the calendar.
-- [ ] Verify the demo cannot call personal services or expose credentials through any route or client asset.
-- [ ] Prepare the public deployment and a short walkthrough describing what works and the deliberate limits. Rory decides when it is ready to share.
+- [x] Build a separate fictional dataset and demo mode with no live Gmail/WhatsApp connections, personal feed tokens, source messages, or personal records.
+- [x] Demonstrate the story end to end: a message or booking becomes a suggestion, the user reviews it, and it appears on the calendar.
+- [x] Verify demo isolation with runtime import/capability tests, production connection restrictions, generated-asset secret checks and unauthenticated API rejection. A full browser network recording remains a separate acceptance check.
+- [x] Prepare the public deployment and [a short walkthrough](docs/demo-implementation.md#short-walkthrough) describing scripted examples and deliberate limits. Rory decides when it is ready to share.
 
 **Done when:** The approved demo is published, can be explored without connecting accounts, demonstrates the core experience, and preserves the frontend design developed by Rory and Codex.
 

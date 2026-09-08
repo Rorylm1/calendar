@@ -14,13 +14,17 @@ Rory directs the product and design with Codex implementing the design, frontend
 
 - The Edge personal frontend, owner-restricted Vercel API bridge with Google identity sign-in, encrypted calendar storage, manual event forms, and proposal review flows are implemented. The personal calendar starts empty; fictional bookings stay in the design studies.
 - Local API checks passed for manual creation, editing, clearing optional fields, rejecting stale revisions with HTTP 409, deletion, and owner/origin restrictions. These establish the local API flow; they do not establish production access or actual iPhone behaviour.
-- **112 backend tests pass** using synthetic data. They cover calendar/proposal operations, Gmail capture and recovery, OAuth safeguards, parsing, queue failures, retention, and budget controls. Real inbox quality still needs evaluation.
+- **117 backend tests pass** using synthetic data. They cover calendar/proposal operations, Gmail capture and recovery, OAuth safeguards, parsing, queue failures, retention, and budget controls. Real inbox quality still needs evaluation.
 - Two live OpenRouter calls using fictional booking text passed: Gemini 3.5 Flash Lite triage and Gemini 3.6 Flash extraction. Strict structured output and the configured provider restrictions were accepted; the combined provider-reported cost was **$0.00507645**. This establishes model/API compatibility, not a monthly cost forecast or real-mail accuracy.
 - The private Next.js app on Vercel and isolated Hetzner backend are live; source is published at Rorylm1/calendar. Hosted connection state and OAuth initiation work; trusted HTTPS, unauthenticated API rejection, and SQLite persistence through a service restart were verified. See [deployment notes](ops/README.md).
 - Google OAuth is configured for ongoing personal use and read-only Gmail. The owner completed consent and the expected Gmail profile was verified; see [Google setup and handoff](ops/google-setup.md). The saved import completed, a Gmail history checkpoint is present, and hourly checks continue. Captured interpretation failures remain available for retry; real-mail quality acceptance continues; live mailbox counts stay in the private app. Actual WhatsApp forwarding and physical iPhone feed/notification acceptance remain unverified. Implementation details and the model smoke record are in [server/README.md](server/README.md).
 
 - Private confirmed-events ICS delivery, revocable links, per-event reminders, installable-app assets and opt-in grouped review push are implemented and tested with fictional data. See [calendar delivery](docs/calendar-delivery.md). No real subscription or notification was enabled while Rory was away.
 - Daily server backups are enabled. One online database backup was copied off-host and verified for integrity and decryptability in isolated storage. Full application recovery and independent key escrow remain open; see [backup recovery](docs/backup-recovery.md).
+
+- A 50-case fictional model evaluation completed for $0.2470869. Its [unchanged baseline and reviewed mismatches](docs/evaluation-baseline-2026-09-07.md) led to lossless time-format handling and incomplete notices for unmatched changes. Real-mail accuracy remains unmeasured.
+
+- A separate fictional `/demo` now demonstrates the Edge calendar without connecting accounts. It uses scripted examples and in-memory interactions; [the demo record](docs/demo-implementation.md) distinguishes browser checks from pending device/design acceptance.
 
 ## 1. Agreed scope
 

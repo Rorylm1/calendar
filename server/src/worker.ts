@@ -8,6 +8,9 @@ import { Extraction, type Interpreter } from './interpreter.ts';
 
 type Scan = { mode: 'initial' | 'history' | 'recovery'; baseline: string; query?: string; pageToken?: string; pageIds?: string[]; nextPageToken?: string; finalHistoryId?: string };
 const HOUR = 3600000;
+// Models sometimes spell minute-precision times with zero seconds. This is
+// lossless; nonzero seconds and malformed times still fail domain validation.
+const minuteTime = (value: string | null) => value && /^(?:[01]\d|2[0-3]):[0-5]\d:00$/.test(value) ? value.slice(0, 5) : value;
 export class CalendarWorker {
   private active?: Promise<void>;
   private operation?: AbortController;
@@ -168,14 +171,13 @@ export class CalendarWorker {
         const proposals: Omit<Proposal, 'id' | 'createdAt' | 'revision' | 'status'>[] = [];
         for (const candidate of output.proposals) {
           if (candidate.attendance === 'declined' && candidate.action === 'create') continue;
-          const rawFields = Object.fromEntries(Object.entries(candidate.event).filter(([, value]) => value !== null)); const event = EventFields.parse(rawFields);
+          const rawFields = Object.fromEntries(Object.entries({ ...candidate.event, time: minuteTime(candidate.event.time), endTime: minuteTime(candidate.event.endTime) }).filter(([, value]) => value !== null)); const event = EventFields.parse(rawFields);
           const target = candidate.targetEventId ? events.find(x => x.id === candidate.targetEventId) : undefined;
-          if (candidate.action !== 'create' && !target) throw new Error('Model proposed an unknown update target');
           const corpus = sourceCorpus(source).replace(/\s+/g, ' ').toLowerCase();
           const evidence = candidate.evidence.filter(text => text.length > 2 && text.length <= 700 && corpus.includes(text.replace(/\s+/g, ' ').toLowerCase())).slice(0, 5);
           if (!evidence.length) throw new Error('Model returned no verifiable source excerpt');
           if (candidate.action === 'create' && events.some(existing => existing.title.toLowerCase() === event.title.toLowerCase() && existing.date === event.date && existing.time === event.time && existing.reference === event.reference)) continue;
-          const unresolvedFields = [...new Set([...candidate.unresolvedFields, ...(!event.date ? ['date'] : [])])];
+          const unresolvedFields = [...new Set([...candidate.unresolvedFields, ...(!event.date ? ['date'] : []), ...(candidate.action !== 'create' && !target ? ['targetEventId'] : [])])];
           proposals.push({ action: candidate.action, ...(target ? { targetEventId: target.id, targetRevision: target.revision } : {}), event, attendance: candidate.attendance, reason: candidate.reason.slice(0, 1200), evidence, unresolvedFields, sourceMessageIds: [source.id] });
         }
         this.store.transaction(() => { for (const proposal of proposals) this.store.putProposal(proposal); this.store.sourceStatus(source.id, 'processed'); });
