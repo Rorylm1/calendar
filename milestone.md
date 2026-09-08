@@ -50,7 +50,7 @@ Rory directs the design with Codex implementing it. Edge is the current visual r
 | 6. Prove everyday reliability | Private version that survives failures and is useful in daily use | Milestones 3–5 |
 | 7. Publish the showcase | Polished public demo with fictional data | Stable interface and isolation verified; personal-use feedback informs polish |
 
-The milestone numbers identify work areas, not the current execution order. The calendar foundation and Gmail are deployed; WhatsApp account setup and one real forward are verified; current work can advance WhatsApp interpretation alongside calendar delivery and reliability. Long-term test-number suitability remains an acceptance check. Milestones are defined by working outcomes rather than speculative dates; Rory's design review can proceed alongside backend and account setup.
+The milestone numbers identify work areas, not the current execution order. The calendar foundation and Gmail are deployed; WhatsApp account setup and one real forward are verified; current work can advance WhatsApp acceptance alongside calendar delivery and reliability. Long-term test-number suitability remains an acceptance check. Milestones are defined by working outcomes rather than speculative dates; Rory's design review can proceed alongside backend and account setup.
 
 ## Milestone 1 — Prove the official WhatsApp receiver
 
@@ -183,6 +183,8 @@ The milestone numbers identify work areas, not the current execution order. The 
 
 - [x] Read JPEG/PNG screenshots through the existing model, with authenticated Meta downloads, bounded memory, cached encrypted transcription and the shared spending limit. Fictional hotel screenshot passed the live model check.
 - [ ] Verify a real phone-forwarded screenshot through Meta download → interpretation → calendar. PDF/document and voice-note reading remain unsupported.
+
+**Live verification:** Processing and screenshot access are enabled on the server; the Vercel update is deployed. The existing real fireworks forward was interpreted and routed to Needs details because “this year” has no original message timestamp. A real unambiguous dated forward and a phone-forwarded screenshot remain acceptance checks.
 
 **Current limits:** Forwarded changes/cancellations require original chronology in Needs details. Ambiguous relative dates are never guessed. Explicit replies can complete one safely matched pending candidate; unrelated chat messages are not merged. Renewed media credentials expire after about 60 days; ongoing renewal and test-number longevity remain operational acceptance work.
 
