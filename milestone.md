@@ -1,6 +1,6 @@
 # Personal calendar — milestones
 
-Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 140 backend tests, 49 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; one genuine WhatsApp forward is captured, while WhatsApp interpretation and iPhone device acceptance remain pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend and Vercel update are deployed and eight eligible pending items have been applied. Rory chose to pause the recurring TradeR jobs causing memory exhaustion; authenticated calendar checks now pass. Longer-term reliability and iPhone acceptance remain open.
+Updated: 8 September 2026. Based on [plan.md](plan.md). The private Edge app and always-on backend are deployed. Local API checks, 150 backend tests, 49 web tests, a live synthetic model pair, and remote storage/restart checks have passed. Google setup and account-holder consent are complete. Gmail is connected, the initial import is complete, and hourly checks are active. The private calendar feed and opt-in grouped alerts are implemented; one genuine WhatsApp forward is captured, with WhatsApp interpretation now implemented and iPhone device acceptance still pending. Backup/restore verification and a synthetic evaluation corpus advance independently while Rory is away. Automatic calendar entry and exact `INVITATION: ` labels are implemented and tested; the backend and Vercel update are deployed and eight eligible pending items have been applied. Rory chose to pause the recurring TradeR jobs causing memory exhaustion; authenticated calendar checks now pass. Longer-term reliability and iPhone acceptance remain open.
 
 ## Objective
 
@@ -160,7 +160,7 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [x] Keep the existing private feed URL and include both statuses with the same calendar colour; invitations are tentative/free and alarm-free.
 - [x] Adapt optional grouped alerts to calendar updates and missing-detail exceptions; preserve opt-in and quiet hours.
 - [x] Back up and apply eligible existing pending items without rescanning Gmail or rerunning models. Eight items added, all 15 prior events preserved, eight factual exceptions retained, existing feed link and push preferences unchanged.
-- [x] Test the combined lifecycle: 140 backend tests and 47 web tests pass; fictional browser flows for automatic addition, invitation acceptance and missing-detail correction passed. Independent backend regression review found no remaining blocker in its checked scope.
+- [x] Test the combined lifecycle: 150 backend tests and 47 web tests pass; fictional browser flows for automatic addition, invitation acceptance and missing-detail correction passed. Independent backend regression review found no remaining blocker in its checked scope.
 - [x] Deploy the automatic-entry update to the backend and Vercel app. Backend/feed checks passed and the production page serves the new interface.
 - [x] Remove the identified recurring memory-pressure trigger by Rory’s choice: leave TradeR automatic jobs paused, preserve their data, and verify three authenticated calendar reads return 200.
 - [ ] Verify continued calendar responsiveness in ordinary use; TradeR jobs must stay paused until Rory explicitly requests their return.
@@ -173,13 +173,18 @@ The milestone numbers identify work areas, not the current execution order. The 
 **Owner:** Codex; Rory and Codex refine related app screens and clarification flows.
 
 - [ ] Establish an official receiving route that passed milestone 1 and fits the no-extra-owned-number constraint; restrict capture to Rory's sender identity. Do not assume a Meta test number is permanent, buy another number, migrate the personal account or use Baileys.
-- [ ] Persist messages before acknowledging delivery and process them through a durable queue. Make retries harmless.
-- [ ] Use Gmail's automatic-addition and attendance rules with explicit WhatsApp provenance: valid bookings are confirmed, while unaccepted dated invitations use `INVITATION: ` in the same calendar.
-- [ ] Associate related forwards and follow-up context carefully; request clarification when the intended event or original date is unclear.
-- [ ] Add eligible forwarded items without a mandatory confirmation step. Calendar attendance controls never send an RSVP.
-- [ ] Route missing or conflicting facts and unsafe matches to the existing Needs details flow; do not invent the original sender or date.
-- [ ] Keep calendar capture independent of outbound WhatsApp messages. No bot replies or in-chat confirmation buttons are required or currently authorized; assess any future messaging separately.
+- [x] Persist messages before acknowledging delivery and process them through a durable queue. Make retries harmless.
+- [x] Use Gmail's automatic-addition and attendance rules with explicit WhatsApp provenance: valid bookings are confirmed, while unaccepted dated invitations use `INVITATION: ` in the same calendar.
+- [x] Associate related forwards and follow-up context carefully; request clarification when the intended event or original date is unclear.
+- [x] Add eligible forwarded items without a mandatory confirmation step. Calendar attendance controls never send an RSVP.
+- [x] Route missing or conflicting facts and unsafe matches to the existing Needs details flow; do not invent the original sender or date.
+- [x] Keep calendar capture independent of outbound WhatsApp messages. No bot replies or in-chat confirmation buttons are required or currently authorized; assess any future messaging separately.
 - [ ] Apply safely matched forwarded changes and cancellations automatically, preserving owner edits. Explain that unseen changes in the original chat cannot be detected.
+
+- [x] Read JPEG/PNG screenshots through the existing model, with authenticated Meta downloads, bounded memory, cached encrypted transcription and the shared spending limit. Fictional hotel screenshot passed the live model check.
+- [ ] Verify a real phone-forwarded screenshot through Meta download → interpretation → calendar. PDF/document and voice-note reading remain unsupported.
+
+**Current limits:** Forwarded changes/cancellations require original chronology in Needs details. Ambiguous relative dates are never guessed. Explicit replies can complete one safely matched pending candidate; unrelated chat messages are not merged. Renewed media credentials expire after about 60 days; ongoing renewal and test-number longevity remain operational acceptance work.
 
 **Done when:** Rory can forward a message to the proven official receiver and see one correct dated booking or labelled invitation appear automatically. Repeated forwards remain idempotent. A forwarded “tomorrow” with no reliable original date needs clarification; later changes take effect only after being forwarded and safely matched. The route needs no extra owned number, mandatory confirmation step or outgoing RSVP.
 

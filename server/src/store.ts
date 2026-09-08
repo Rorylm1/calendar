@@ -110,7 +110,7 @@ export class Store {
       if (proposal.status === 'confirmed') return this.get<{ proposal: Proposal; event: CalendarEvent | null }>('confirm_results', id)!;
       if (proposal.status !== 'pending') throw new AppError('review_conflict', 'This suggestion was dismissed.', 409);
       let event: CalendarEvent | null = null;
-      if (proposal.action === 'create') { event = this.createEvent(mergeFields({ ...proposal.event, attendance: proposal.attendance === 'confirmed' ? 'confirmed' : 'invited' }, patch), 'Gmail'); }
+      if (proposal.action === 'create') { event = this.createEvent(mergeFields({ ...proposal.event, attendance: proposal.attendance === 'confirmed' ? 'confirmed' : 'invited' }, patch), proposal.source || 'Gmail'); }
       else {
         if (!proposal.targetEventId || proposal.targetRevision === undefined) throw new AppError('review_conflict', 'Choose the existing event before applying this change.', 409);
         const old = this.requireEvent(proposal.targetEventId, proposal.targetRevision);
@@ -201,7 +201,7 @@ export class Store {
         if (metadata && compatibleIdentity(duplicate, proposal.event)) { recordSource(metadata); this.put('event_automation', duplicate.id, metadata); }
         return finish(duplicate, 'duplicate');
       }
-      const event = this.createEvent({ ...proposal.event, attendance }, 'Gmail');
+      const event = this.createEvent({ ...proposal.event, attendance }, proposal.source || 'Gmail');
       const metadata: AutomationMetadata = { baseline: eventFields(event), ownerFields: [], managed: true, identities: [eventFields(event)] }; recordSource(metadata); this.put('event_automation', event.id, metadata);
       return finish(event, 'created');
     }
@@ -237,20 +237,34 @@ export class Store {
     this.saveEvent(event); metadata.identities = [...(metadata.identities || [metadata.baseline]), eventFields(event)]; metadata.baseline = { ...suppliedFields(metadata.baseline, proposal.event), attendance }; recordSource(metadata); this.put('event_automation', event.id, metadata);
     return finish(event, 'updated');
   }
+  resolveWhatsAppReply(source: SourceMessage, proposalIds: string[]) {
+    if (source.channel !== 'whatsapp' || source.whatsapp?.forwarded || !source.context.length) return;
+    const parent = source.context.at(-1)!.id;
+    const older = this.proposals().filter(p => p.status === 'pending' && p.action === 'create' && p.sourceMessageIds.includes(parent));
+    const applied = proposalIds.map(id => this.get<{ proposal: Proposal; event: CalendarEvent | null }>('confirm_results', id)).filter(result => result?.event && result.proposal.action === 'create');
+    if (older.length !== 1 || applied.length !== 1) return;
+    const previous = older[0]!; const result = applied[0]!;
+    if (normalized(previous.event.title) !== normalized(result.event!.title) || previous.event.kind !== result.event!.kind) return;
+    previous.event = { ...result.proposal.event }; previous.attendance = result.proposal.attendance; previous.unresolvedFields = [];
+    previous.sourceMessageIds = [...new Set([...previous.sourceMessageIds, source.id])];
+    this.finishProposal(previous, result.event, 'automatic', 'duplicate');
+  }
   dismiss(id: string): Proposal { return this.transaction(() => { const proposal = this.get<Proposal>('proposals', id); if (!proposal) throw new AppError('not_found', 'This suggestion is no longer available.', 404); if (proposal.status === 'confirmed') throw new AppError('review_conflict', 'This suggestion has already been confirmed.', 409); if (proposal.status === 'pending') { proposal.status = 'dismissed'; proposal.revision += 1; this.put('proposals', id, proposal); } return proposal; }); }
   captured(id: string) { return Boolean(this.db.prepare('SELECT 1 FROM sources WHERE id=?').get(id)); }
   capture(source: SourceMessage) { const now = new Date().toISOString(); this.db.prepare('INSERT OR IGNORE INTO sources(id,status,captured_at,updated_at,payload) VALUES(?,?,?,?,?)').run(source.id, 'fetched', now, now, this.vault.seal(source, `source:${source.id}`)); }
+  source(id: string): SourceMessage | undefined { const row = this.db.prepare('SELECT payload FROM sources WHERE id=?').get(id) as { payload: string | null } | undefined; return row?.payload ? this.vault.open<SourceMessage>(row.payload, `source:${id}`) : undefined; }
+  replaceSource(source: SourceMessage) { this.db.prepare('UPDATE sources SET payload=? WHERE id=? AND payload IS NOT NULL').run(this.vault.seal(source, `source:${source.id}`), source.id); }
   skipSource(id: string) { const now = new Date().toISOString(); this.db.prepare('INSERT OR IGNORE INTO sources(id,status,captured_at,updated_at) VALUES(?,?,?,?)').run(id, 'filtered', now, now); }
-  pending(limit = 40, now = Date.now()): SourceMessage[] { return (this.db.prepare("SELECT id,payload FROM sources WHERE payload IS NOT NULL AND (status='fetched' OR (status='failed' AND attempts<3 AND next_attempt_at<=?)) ORDER BY CASE status WHEN 'fetched' THEN 0 ELSE 1 END,captured_at LIMIT ?").all(now, limit) as { id: string; payload: string }[]).map(row => this.vault.open<SourceMessage>(row.payload, `source:${row.id}`)); }
+  pending(limit = 40, now = Date.now(), includeWhatsApp = true): SourceMessage[] { return (this.db.prepare("SELECT id,payload FROM sources WHERE payload IS NOT NULL AND (? OR id NOT LIKE 'whatsapp:%') AND (status='fetched' OR (status='failed' AND attempts<3 AND next_attempt_at<=?)) ORDER BY CASE status WHEN 'fetched' THEN 0 ELSE 1 END,captured_at LIMIT ?").all(includeWhatsApp ? 1 : 0, now, limit) as { id: string; payload: string }[]).map(row => this.vault.open<SourceMessage>(row.payload, `source:${row.id}`)); }
   sourceStatus(id: string, status: SourceStatus, audit?: unknown) { this.db.prepare("UPDATE sources SET attempts=attempts+CASE WHEN ?='processing' AND status!='processing' THEN 1 ELSE 0 END,status=?,updated_at=?,next_attempt_at=CASE WHEN ?='failed' THEN ?+MIN(14400000,1800000*(1 << MIN(attempts,3))) ELSE next_attempt_at END,audit=COALESCE(?,audit) WHERE id=?").run(status, status, new Date().toISOString(), status, Date.now(), audit ? this.vault.seal(audit, `audit:${id}`) : null, id); }
   retryFailures() { this.db.exec("UPDATE sources SET status='fetched',attempts=0,next_attempt_at=0 WHERE status='failed' AND payload IS NOT NULL"); }
   counts() { const count = { pendingMessages: 0, capturedMessages: 0, filteredMessages: 0, failedMessages: 0 }; for (const row of this.db.prepare('SELECT status,COUNT(*) n FROM sources GROUP BY status').all() as { status: SourceStatus; n: number }[]) { count.capturedMessages += row.n; if (['fetched', 'processing', 'failed'].includes(row.status)) count.pendingMessages += row.n; if (row.status === 'filtered') count.filteredMessages += row.n; if (row.status === 'failed') count.failedMessages += row.n; } return count; }
   pruneSources(now = Date.now()) {
     const cutoff = new Date(now - 14 * 86400000).toISOString();
-    for (const row of this.db.prepare("SELECT id FROM sources WHERE status IN ('processed','filtered') AND captured_at<? AND (payload IS NOT NULL OR audit IS NOT NULL)").all(cutoff) as { id: string }[]) this.remove('triage', row.id);
+    for (const row of this.db.prepare("SELECT id FROM sources WHERE status IN ('processed','filtered') AND captured_at<? AND (payload IS NOT NULL OR audit IS NOT NULL)").all(cutoff) as { id: string }[]) { this.remove('triage', row.id); if (row.id.startsWith('whatsapp:')) this.remove('whatsapp_spike_inbox', row.id.slice(9)); }
     this.db.prepare("UPDATE sources SET payload=NULL,audit=NULL WHERE status IN ('processed','filtered') AND captured_at < ?").run(cutoff); this.db.prepare('DELETE FROM oauth_states WHERE expires_at<?').run(now);
   }
-  clearSources() { this.db.exec('DELETE FROM sources'); }
+  clearSources() { this.db.exec("DELETE FROM sources WHERE id NOT LIKE 'whatsapp:%'"); }
   audit(limit = 50) { return (this.db.prepare('SELECT id,status,audit FROM sources WHERE audit IS NOT NULL ORDER BY updated_at DESC LIMIT ?').all(limit) as { id: string; status: string; audit: string }[]).map(row => ({ id: row.id, status: row.status, ...this.vault.open<{ decision?: string; reason?: string; excerpt?: string; subject?: string }>(row.audit, `audit:${row.id}`) })); }
   createOAuthState(state: string, ownerId: string, verifier: string, now = Date.now()) { const key = hash(state); this.db.prepare('INSERT INTO oauth_states VALUES(?,?,?)').run(key, now + 10 * 60000, this.vault.seal({ ownerId, verifier }, `oauth:${key}`)); }
   consumeOAuthState(state: string, ownerId: string, now = Date.now()): string {

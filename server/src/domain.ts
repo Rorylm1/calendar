@@ -23,14 +23,17 @@ export const EventPatch = z.object({
   kind: Kind.optional(), location: z.string().max(1000).optional(), detail: z.string().max(6000).optional(), reference: z.string().max(240).nullable().optional(), reminderMinutes: ReminderMinutes.optional(), attendance: Attendance.optional(),
 }).strict();
 export type Fields = z.infer<typeof EventFields>;
-export type CalendarEvent = Fields & { id: string; date: string; source: 'Gmail' | 'Manual'; revision: number };
+export type CalendarEvent = Fields & { id: string; date: string; source: 'Gmail' | 'WhatsApp' | 'Manual'; revision: number };
 export type Proposal = {
+  source?: 'Gmail' | 'WhatsApp';
   id: string; action: 'create' | 'update' | 'cancel'; targetEventId?: string; targetRevision?: number;
   event: Fields; attendance: 'confirmed' | 'invited' | 'unknown' | 'declined'; reason: string; evidence: string[];
   unresolvedFields: string[]; status: 'pending' | 'confirmed' | 'dismissed'; revision: number; sourceMessageIds: string[]; createdAt: string;
   appliedBy?: 'automatic' | 'owner'; appliedAt?: string; outcome?: 'created' | 'updated' | 'cancelled' | 'duplicate' | 'suppressed';
 };
 export type SourceMessage = {
+  channel?: 'gmail' | 'whatsapp';
+  whatsapp?: { forwarded: boolean; mediaId?: string; mediaType?: string; mediaHash?: string; imageRead?: boolean; imageUnclear?: boolean; imageReason?: string };
   id: string; threadId: string; from: string; to: string; subject: string; receivedAt: string; sentByOwner: boolean;
   text: string; context: { id: string; from: string; sentByOwner: boolean; sentAt: string; text: string }[];
   calendar?: { fields: Fields; uid?: string; method?: string }; unsupportedAttachments: string[];

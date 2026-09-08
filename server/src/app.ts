@@ -10,7 +10,7 @@ import { AppError } from './errors.ts';
 import { safeEqual } from './crypto.ts';
 import { registerPushRoutes } from './push.ts';
 import { registerFeedRoutes } from './calendar-feed.ts';
-import { registerWhatsAppRoutes } from './whatsapp.ts';
+import { registerWhatsAppRoutes, enqueueWhatsAppBacklog, whatsappStatus } from './whatsapp.ts';
 
 const Owner = z.string().min(1).max(240);
 const Revision = z.number().int().positive();
@@ -36,13 +36,13 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
     return reply.status(500).send({ error: { code: 'service_error', message: 'The calendar could not complete that action. Please try again.' } });
   });
   app.get('/health', async () => ({ ok: true }));
-  registerWhatsAppRoutes(app, config, store);
+  registerWhatsAppRoutes(app, config, store, () => { if (overrides.schedule !== false) worker.kickProcessing(); });
   registerFeedRoutes(app, config, store);
   const push = registerPushRoutes(app, config, store, { isBusy: () => worker.syncing || worker.processingStatus === 'processing' });
   app.get('/v1/state', async () => {
     const connection = store.get<GmailConnection>('connection');
     const counts = store.counts();
-    return { events: store.events(), proposals: store.proposals().filter(p => p.status === 'pending').sort((a, b) => b.createdAt.localeCompare(a.createdAt)), connection: {
+    return { whatsapp: whatsappStatus(config, store), events: store.events(), proposals: store.proposals().filter(p => p.status === 'pending').sort((a, b) => b.createdAt.localeCompare(a.createdAt)), connection: {
       status: !googleConfigured(config) ? 'not_configured' : worker.syncing ? 'syncing' : connection?.status || 'disconnected',
       email: connection?.email || null, lastSyncAt: connection?.lastSyncAt || null, nextSyncAt: connection?.nextSyncAt || null,
       ...counts, processingStatus: counts.pendingMessages && !config.OPENROUTER_API_KEY && worker.processingStatus === 'idle' ? 'paused_missing_key' : worker.processingStatus,
@@ -63,7 +63,7 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
   app.post('/v1/events', async (request, reply) => reply.status(201).send({ event: store.createEvent(EventFields.parse(request.body)) }));
   app.patch('/v1/events/:id', async request => { const { id } = z.object({ id: z.string().min(1) }).parse(request.params); const body = z.object({ event: EventPatch, expectedRevision: Revision }).strict().parse(request.body); return { event: store.patchEvent(id, body.event, body.expectedRevision) }; });
   app.delete('/v1/events/:id', async request => { const { id } = z.object({ id: z.string().min(1) }).parse(request.params); const body = z.object({ expectedRevision: Revision }).strict().parse(request.body); store.deleteEvent(id, body.expectedRevision); return { deleted: true }; });
-  app.addHook('onReady', async () => { if (overrides.schedule !== false) { worker.start(); push.start(); } });
+  app.addHook('onReady', async () => { if (overrides.schedule !== false) { if (config.WHATSAPP_PROCESSING_ENABLED) enqueueWhatsAppBacklog(store); worker.start(); push.start(); } });
   app.addHook('onClose', async () => { await push.stop(); await worker.stop(); if (!overrides.store) store.close(); });
   return { app, store, google, worker, push };
 }

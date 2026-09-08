@@ -577,3 +577,5 @@
   .delivery-status { grid-column: 2; margin: -3px 0 0; }
   .personal-calendar { padding-bottom: env(safe-area-inset-bottom); }
 }
+
+.whatsapp-connection { border-top: 1px solid var(--line, #344751); margin-top: 28px; padding-top: 24px; }

@@ -28,6 +28,7 @@ export type CalendarEvent = EventFields & {
   revision: number;
 };
 export type Proposal = {
+  source?: string;
   id: string;
   action: 'create' | 'update' | 'cancel';
   targetEventId?: string;
@@ -66,6 +67,7 @@ export type Connection = {
   configured: boolean;
 };
 export type CalendarState = {
+  whatsapp?: { configured: boolean; contactNumber: string | null; processingEnabled: boolean; screenshotsConfigured: boolean; mediaError: string | null; capturedMessages: number; lastReceivedAt: string | null };
   events: CalendarEvent[];
   proposals: Proposal[];
   connection: Connection;

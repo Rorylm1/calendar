@@ -4,7 +4,8 @@ import { Store } from './store.ts';
 import { ProviderError, ProcessingPaused, safeError } from './errors.ts';
 import { excluded, normalizeMessage, parts, sourceCorpus, type GmailMessage } from './mail.ts';
 import type { GmailProvider } from './gmail.ts';
-import { Extraction, type Interpreter } from './interpreter.ts';
+import { downloadWhatsAppImage, WhatsAppMediaError } from './whatsapp-media.ts';
+import { Extraction, ImageReading, type Interpreter } from './interpreter.ts';
 
 type Scan = { mode: 'initial' | 'history' | 'recovery'; baseline: string; query?: string; pageToken?: string; pageIds?: string[]; nextPageToken?: string; finalHistoryId?: string };
 const HOUR = 3600000;
@@ -23,18 +24,18 @@ export class CalendarWorker {
   syncing = false;
   processingStatus: 'idle' | 'processing' | 'paused_missing_key' | 'paused_budget' | 'error' = 'idle';
   processingError: string | null = null;
-  constructor(private config: Config, private store: Store, private provider: (signal?: AbortSignal) => GmailProvider, private interpreter: Interpreter) {}
+  constructor(private config: Config, private store: Store, private provider: (signal?: AbortSignal) => GmailProvider, private interpreter: Interpreter, private imageDownload: typeof downloadWhatsAppImage = downloadWhatsAppImage) {}
   start() { this.stopped = false; this.started = true; this.schedule(); this.continueQueue(); }
   private continueQueue() {
     if (!this.started || this.stopped || this.active || this.queueTimer) return;
     const connection = this.store.get<GmailConnection>('connection'); const scan = this.store.get<Scan>('scan');
     const continueImport = Boolean(scan && connection?.status === 'connected' && !connection.error);
-    if (!continueImport && (!this.store.pending(1).length || this.processingStatus.startsWith('paused_'))) return;
+    if (!continueImport && (!this.store.pending(1, Date.now(), this.config.WHATSAPP_PROCESSING_ENABLED).length || this.processingStatus.startsWith('paused_'))) return;
     this.queueTimer = setTimeout(() => {
       this.queueTimer = undefined; if (this.stopped || this.active) return;
       const fresh = this.store.get<GmailConnection>('connection');
       if (this.store.get('scan') && fresh?.status === 'connected' && !fresh.error) this.kick();
-      else if (this.store.pending(1).length && !this.processingStatus.startsWith('paused_')) this.kickProcessing();
+      else if (this.store.pending(1, Date.now(), this.config.WHATSAPP_PROCESSING_ENABLED).length && !this.processingStatus.startsWith('paused_')) this.kickProcessing();
     }, 500); this.queueTimer.unref();
   }
   kickProcessing() {
@@ -153,12 +154,27 @@ export class CalendarWorker {
   }
   async process(signal?: AbortSignal): Promise<void> {
     this.processingStatus = 'processing'; this.processingError = null;
-    const sources = this.store.pending(100);
+    const sources = this.store.pending(40, Date.now(), this.config.WHATSAPP_PROCESSING_ENABLED);
     for (const source of sources) {
       if (this.stopped) break;
       this.store.sourceStatus(source.id, 'processing');
       try {
-        const triage = await this.interpreter.triage(source, signal); signal?.throwIfAborted();
+        if (source.whatsapp?.mediaId && !source.whatsapp.imageRead) {
+          const image = await this.imageDownload(this.config, source, signal);
+          if (!this.interpreter.readImage) throw new Error('Image interpretation unavailable');
+          const reading = ImageReading.parse(await this.interpreter.readImage(image, signal)); signal?.throwIfAborted();
+          source.text = [source.text, reading.text].filter(Boolean).join('\n');
+          source.whatsapp = { ...source.whatsapp, imageRead: true, imageUnclear: reading.unclear, imageReason: reading.reason };
+          this.store.replaceSource(source); this.store.remove('whatsapp_media_error');
+        }
+        const manualWhatsApp = source.channel === 'whatsapp' && (source.unsupportedAttachments.length > 0 || source.whatsapp?.imageUnclear || source.whatsapp?.imageRead && !source.text.trim());
+        if (manualWhatsApp) {
+          this.store.transaction(() => {
+            this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: source.whatsapp?.imageReason || 'This attachment could not be read. Enter the booking details.' }, attendance: 'unknown', reason: 'The forwarded image or attachment needs clearer details before an event can be added.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] });
+            this.store.sourceStatus(source.id, 'processed', { decision: 'manual_review', reason: 'Attachment needs details', subject: source.subject });
+          }); continue;
+        }
+        const triage = source.channel === 'whatsapp' ? { decision: 'relevant', reason: 'Selected WhatsApp capture' } : await this.interpreter.triage(source, signal); signal?.throwIfAborted();
         this.store.sourceStatus(source.id, 'processing', { ...triage, excerpt: source.text.slice(0, 240), subject: source.subject });
         if (triage.decision === 'irrelevant') { this.store.sourceStatus(source.id, 'filtered'); continue; }
         if (source.unsupportedAttachments.length && !source.calendar && source.text.length < 160) {
@@ -175,17 +191,24 @@ export class CalendarWorker {
           const corpus = sourceCorpus(source).replace(/\s+/g, ' ').toLowerCase();
           const evidence = candidate.evidence.filter(text => text.length > 2 && text.length <= 700 && corpus.includes(text.replace(/\s+/g, ' ').toLowerCase())).slice(0, 5);
           if (!evidence.length) throw new Error('Model returned no verifiable source excerpt');
-          const unresolvedFields = [...new Set([...candidate.unresolvedFields, ...(!event.date ? ['date'] : []), ...(candidate.action !== 'create' && !target ? ['targetEventId'] : [])])];
-          proposals.push({ action: candidate.action, ...(target ? { targetEventId: target.id, targetRevision: target.revision } : {}), event, attendance: candidate.attendance, reason: candidate.reason.slice(0, 1200), evidence, unresolvedFields, sourceMessageIds: [source.id] });
+          const relativeForward = source.channel === 'whatsapp' && (source.whatsapp?.forwarded || source.whatsapp?.mediaId) && /\b(tomorrow|today|tonight|yesterday|(?:next|this|last)\s+(?:week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i.test(source.text);
+          if (relativeForward) { delete event.date; delete event.endDate; }
+          const unresolvedFields = [...new Set([...candidate.unresolvedFields, ...(relativeForward ? ['originalDate', 'date'] : []), ...(source.whatsapp?.forwarded && candidate.action !== 'create' ? ['sourceChronology'] : []), ...(!event.date ? ['date'] : []), ...(candidate.action !== 'create' && !target ? ['targetEventId'] : [])])];
+          proposals.push({ ...(source.channel === 'whatsapp' ? { source: 'WhatsApp' as const } : {}), action: candidate.action, ...(target ? { targetEventId: target.id, targetRevision: target.revision } : {}), event, attendance: candidate.attendance, reason: candidate.reason.slice(0, 1200), evidence, unresolvedFields, sourceMessageIds: [source.id] });
         }
         this.store.transaction(() => {
           const proposalIds = proposals.map(proposal => this.store.putProposal(proposal)?.id).filter((id): id is string => Boolean(id));
-          this.store.autoApplyPending({ proposalIds }); this.store.sourceStatus(source.id, 'processed');
+          this.store.autoApplyPending({ proposalIds }); this.store.resolveWhatsAppReply(source, proposalIds); this.store.sourceStatus(source.id, 'processed');
         });
       } catch (error) {
         if (signal?.aborted) { this.store.sourceStatus(source.id, 'fetched'); this.processingStatus = 'idle'; this.processingError = null; return; }
         if (error instanceof ProcessingPaused) { this.store.sourceStatus(source.id, 'fetched'); this.processingStatus = error.reason; this.processingError = safeError(error); return; }
-        this.store.sourceStatus(source.id, 'failed'); this.processingStatus = 'error'; this.processingError = 'Some captured emails could not be interpreted. They are saved and will retry on the next check.';
+        if (error instanceof WhatsAppMediaError && error.reason === 'unsupported') {
+          this.store.transaction(() => { this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: 'Send a clear JPEG or PNG screenshot under 5 MB, or enter the booking details.' }, attendance: 'unknown', reason: 'This image could not be safely read.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] }); this.store.sourceStatus(source.id, 'processed'); });
+          continue;
+        }
+        if (error instanceof WhatsAppMediaError) this.store.put('whatsapp_media_error', 'default', { reason: error.reason, at: new Date().toISOString() });
+        this.store.sourceStatus(source.id, 'failed'); this.processingStatus = 'error'; this.processingError = error instanceof WhatsAppMediaError && error.reason === 'access' ? 'WhatsApp screenshots need a renewed media-access connection. Text capture still works.' : 'Some captured messages could not be interpreted. They are saved and will retry on the next check.';
       }
     }
     if (this.processingStatus === 'processing') this.processingStatus = 'idle';

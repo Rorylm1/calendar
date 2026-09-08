@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { type Config, whatsappConfigured } from './config.ts';
 import { hash, safeEqual } from './crypto.ts';
 import { AppError } from './errors.ts';
+import type { SourceMessage } from './domain.ts';
 import { Store } from './store.ts';
 
 export const WHATSAPP_BODY_LIMIT = 128 * 1024;
@@ -60,10 +61,11 @@ export function parseWhatsAppMessages(payload: unknown, config: Config, now = ne
       const text = record(raw.text).body;
       const supported = message.type === 'text' && typeof text === 'string' && text.length > 0 && Buffer.byteLength(text, 'utf8') <= 16384;
       const media = ['image', 'audio', 'video', 'document', 'sticker'].includes(message.type) ? Media.safeParse(raw[message.type]) : null;
+      const supportedImage = message.type === 'image' && media?.success && media.data.id && ['image/png', 'image/jpeg'].includes(media.data.mime_type || '');
       items.push({
         id: hash(`${value.metadata.phone_number_id}\0${message.id}`), source: 'WhatsApp', channel: 'whatsapp_cloud_api', providerMessageId: message.id,
         senderId: message.from, phoneNumberId: value.metadata.phone_number_id, ...(entry.id ? { businessAccountId: entry.id } : {}), receivedAt: now, sentAt: sent.toISOString(), type: message.type,
-        status: supported ? 'captured' : 'unsupported', ...(supported ? { text: text as string } : { unsupportedReason: message.type === 'text' ? 'invalid_or_oversized_text' as const : 'message_type_not_supported' as const }),
+        status: supported || supportedImage ? 'captured' : 'unsupported', ...(supported ? { text: text as string } : supportedImage ? {} : { unsupportedReason: message.type === 'text' ? 'invalid_or_oversized_text' as const : 'message_type_not_supported' as const }),
         forwarding: { forwarded: message.context?.forwarded ?? null, frequentlyForwarded: message.context?.frequently_forwarded ?? null, originalSender: null, originalSentAt: null },
         context: { ...(message.context?.id ? { replyToMessageId: message.context.id } : {}), ...(message.context?.from ? { replyToSenderId: message.context.from } : {}) },
         ...(media?.success ? { media: media.data } : {}),
@@ -73,16 +75,18 @@ export function parseWhatsAppMessages(payload: unknown, config: Config, now = ne
   return items;
 }
 
-export function captureWhatsAppMessages(store: Store, items: WhatsAppInboxItem[]): void {
+export function captureWhatsAppMessages(store: Store, items: WhatsAppInboxItem[], process = false): void {
   store.transaction(() => {
     const insert = store.db.prepare('INSERT OR IGNORE INTO records(bucket,id,payload) VALUES(?,?,?)');
     const exists = store.db.prepare('SELECT 1 FROM records WHERE bucket=? AND id=?');
     let count = (store.db.prepare('SELECT COUNT(*) n FROM records WHERE bucket=?').get(bucket) as { n: number }).n;
     const stats = store.get<WhatsAppStats>('whatsapp_spike_stats') || emptyStats(); let changed = false;
     for (const item of items) {
-      if (exists.get(bucket, item.id)) continue;
+      if (exists.get(bucket, item.id) || store.captured(`whatsapp:${item.id}`)) continue;
       if (count >= WHATSAPP_INBOX_LIMIT) throw new AppError('whatsapp_inbox_full', 'The WhatsApp spike inbox needs attention before more messages can be accepted.', 503);
-      insert.run(bucket, item.id, store.vault.seal(item, `${bucket}:${item.id}`)); count++; changed = true;
+      insert.run(bucket, item.id, store.vault.seal(item, `${bucket}:${item.id}`));
+      if (process) store.capture(whatsappSource(item, store));
+      count++; changed = true;
       if (item.status === 'captured') stats.capturedMessages++; else stats.unsupportedMessages++;
       if (item.forwarding.forwarded || item.forwarding.frequentlyForwarded) stats.forwardedMessages++;
       if (item.forwarding.frequentlyForwarded) stats.frequentlyForwardedMessages++;
@@ -98,8 +102,31 @@ export function readWhatsAppInbox(store: Store, limit = 50) {
   return { total, items: rows.map(row => store.vault.open<WhatsAppInboxItem>(row.payload, `${bucket}:${row.id}`)) };
 }
 
-export function registerWhatsAppRoutes(app: FastifyInstance, config: Config, store: Store) {
-  app.get('/v1/whatsapp/status', async () => ({ configured: whatsappConfigured(config), ...(store.get<WhatsAppStats>('whatsapp_spike_stats') || emptyStats()), inboxLimit: WHATSAPP_INBOX_LIMIT, processingEnabled: false, repliesEnabled: false }));
+export function whatsappSource(item: WhatsAppInboxItem, store: Store): SourceMessage {
+  const parentId = item.context.replyToMessageId ? `whatsapp:${hash(`${item.phoneNumberId}\0${item.context.replyToMessageId}`)}` : undefined;
+  const parent = parentId ? store.source(parentId) : undefined;
+  const image = item.type === 'image' && item.media?.id && ['image/jpeg', 'image/png'].includes(item.media.mime_type || '');
+  const forwarded = Boolean(item.forwarding.forwarded || item.forwarding.frequentlyForwarded);
+  const id = `whatsapp:${item.id}`;
+  return { id, channel: 'whatsapp', threadId: parent?.threadId || id, from: forwarded ? 'Forwarded WhatsApp message' : 'Calendar owner', to: 'Personal calendar',
+    subject: image ? 'WhatsApp screenshot' : 'WhatsApp message', receivedAt: item.sentAt, sentByOwner: !forwarded,
+    text: item.text || item.media?.caption || '',
+    context: parent ? [...parent.context.slice(-2), { id: parent.id, from: parent.from, sentByOwner: parent.sentByOwner, sentAt: parent.receivedAt, text: parent.text.slice(0, 6000) }] : [],
+    unsupportedAttachments: item.status === 'unsupported' && !image ? [item.media?.filename || item.type] : [],
+    whatsapp: { forwarded, ...(image ? { mediaId: item.media!.id, mediaType: item.media!.mime_type, mediaHash: item.media!.sha256 } : {}) },
+  };
+}
+export function enqueueWhatsAppBacklog(store: Store) {
+  // The spike inbox is capped; migrate in one transaction, using stable source IDs.
+  store.transaction(() => { for (const item of store.all<WhatsAppInboxItem>(bucket)) if (!store.captured(`whatsapp:${item.id}`)) store.capture(whatsappSource(item, store)); });
+}
+export function whatsappStatus(config: Config, store: Store) {
+  return { configured: whatsappConfigured(config), contactNumber: config.WHATSAPP_CONTACT_NUMBER || null, ...(store.get<WhatsAppStats>('whatsapp_spike_stats') || emptyStats()), inboxLimit: WHATSAPP_INBOX_LIMIT,
+    mediaError: store.get<{ reason: string }>('whatsapp_media_error')?.reason || null,
+    processingEnabled: config.WHATSAPP_PROCESSING_ENABLED, screenshotsConfigured: Boolean(config.WHATSAPP_ACCESS_TOKEN), repliesEnabled: false };
+}
+export function registerWhatsAppRoutes(app: FastifyInstance, config: Config, store: Store, onCaptured: () => void = () => {}) {
+  app.get('/v1/whatsapp/status', async () => whatsappStatus(config, store));
   app.get('/v1/whatsapp/inbox', async () => ({ configured: whatsappConfigured(config), ...readWhatsAppInbox(store) }));
   app.register(async webhook => {
     // Encapsulation keeps the normal /v1 JSON parser intact. Sign the exact bytes,
@@ -119,7 +146,8 @@ export function registerWhatsAppRoutes(app: FastifyInstance, config: Config, sto
       let payload: unknown;
       try { payload = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(request.body)); } catch { throw new AppError('invalid_webhook', 'The webhook body must contain valid UTF-8 JSON.', 400); }
       const items = parseWhatsAppMessages(payload, config);
-      captureWhatsAppMessages(store, items);
+      captureWhatsAppMessages(store, items, config.WHATSAPP_PROCESSING_ENABLED);
+      if (config.WHATSAPP_PROCESSING_ENABLED && items.length) onCaptured();
       return reply.status(200).send({ received: true });
     });
   });
