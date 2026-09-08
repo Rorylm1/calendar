@@ -49,7 +49,7 @@ Original installation notes and the existing deployment defaults are preserved u
 
 On 7 September 2026 the initial Gmail import was confirmed complete, a history checkpoint was present, and scheduled capture was active. Both calendar services were running without automatic restarts and storage capacity was healthy. Detailed counts and account-specific diagnostics are retained only in `ops/local/`.
 
-The WhatsApp receiver spike is deployed disabled. Its public webhook returns 404 until all receiver settings are present; private status/inbox endpoints require the service credential. The backend suite now also covers the private ICS feed, opt-in review push and isolated backup recovery. A real Meta forward, long-term test-number usability and iPhone notification delivery remain unverified.
+On 8 September the WhatsApp test receiver was enabled with an owner/receiving-number restriction. Meta verified its callback and active message subscriptions. Correct verification and signed empty delivery return 200; unsigned delivery returns 401. Private status/inbox endpoints require the service credential. Automatic interpretation and replies remain disabled during the real-forward test. The backend suite now also covers the private ICS feed, opt-in review push and isolated backup recovery. A real Meta forward, long-term test-number usability and iPhone notification delivery remain unverified.
 
 
 ## Calendar delivery and recovery

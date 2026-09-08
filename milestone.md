@@ -8,7 +8,7 @@ Build a beautiful personal calendar that turns forwarded WhatsApp messages and G
 
 ## Current sequence — automatic entry and labelled invitations
 
-The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has authorized continued milestone work while away. The official WhatsApp receiver is deployed disabled; its real test awaits Meta account access and must fit the no-extra-owned-number constraint. The private ICS feed, installable app and opt-in grouped alerts are implemented. Device delivery and real-mail quality acceptance remain open. Rory’s 8 September instruction authorizes automatic addition, including eligible existing pending items. Missing or conflicting facts still require input. This supersedes the earlier restriction against applying real suggestions; preserve owner edits, explicit dismissals/deletions, credentials and subscription preferences.
+The Edge app is on Vercel and the Gmail service is running on Hetzner. Rory has authorized continued milestone work while away. The official WhatsApp test receiver is enabled for the verified owner; Meta has verified the callback and active message/test-account subscriptions. The dashboard sent the one authorized sample message. Real inbound forwarding and unattended operation remain to be demonstrated under the no-extra-owned-number constraint. The private ICS feed, installable app and opt-in grouped alerts are implemented. Device delivery and real-mail quality acceptance remain open. Rory’s 8 September instruction authorizes automatic addition, including eligible existing pending items. Missing or conflicting facts still require input. This supersedes the earlier restriction against applying real suggestions; preserve owner edits, explicit dismissals/deletions, credentials and subscription preferences.
 
 - [x] Build and review visual alternatives; select Edge as the working direction.
 - [x] Implement the Edge personal app, encrypted persistent calendar/review data, and owner-restricted API bridge; preserve the original ten design studies.
@@ -59,7 +59,8 @@ The milestone numbers identify work areas, not the current execution order. The 
 **Purpose:** Determine whether forwarding can be useful without another number to buy or manage. Meta supplies the candidate test receiver; its suitability for ongoing personal use is unproven. Do not buy a SIM, migrate the personal account or substitute Baileys. See [the spike findings](docs/whatsapp-spike.md).
 
 - [x] Build and deploy the minimal signed webhook in its disabled state with a separate encrypted spike inbox; 13 new tests cover authentication, allowlists, replay, persistence and limits.
-- [ ] Obtain the Meta-provided test receiver and complete a real delivery check.
+- [x] Obtain the Meta-provided test receiver, verify the owner’s existing phone, and configure Meta’s callback and message subscriptions.
+- [ ] Complete a real delivery check from the owner’s phone.
 - [ ] Forward an actual text message from Rory's normal WhatsApp account and inspect the content and context delivered.
 - [x] Verify webhook authentication and sender/receiver restrictions with synthetic payloads.
 - [ ] Verify the actual Meta signature and sender restriction with a real forward.

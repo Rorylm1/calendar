@@ -1,10 +1,10 @@
 # WhatsApp forwarding spike
 
-Research checked **7 September 2026**. **A real iPhone → Meta → calendar delivery test is still pending.** This document records the proposed setup and what that test must establish; it does not claim that WhatsApp is connected.
+Research checked **7 September 2026**. **A real iPhone → Meta → calendar delivery test is still pending.** Meta’s callback and test-account subscriptions are configured; this document distinguishes setup verification from real phone delivery.
 
 ## Objective and decision
 
-Forward a selected WhatsApp commitment to a calendar contact, then review the captured information in the calendar. The user does **not** want another owned phone number or SIM. The first experiment therefore uses the **Meta-provided test receiver**, if available in the account's onboarding flow. Do not purchase or register another number, migrate the personal WhatsApp account, or treat test assets as a guaranteed permanent service.
+Forward a selected WhatsApp commitment to a calendar contact, then add valid dated items automatically. Invitations use the INVITATION: prefix; missing facts go to Needs details. The user does **not** want another owned phone number or SIM. The first experiment therefore uses the **Meta-provided test receiver**, if available in the account's onboarding flow. Do not purchase or register another number, migrate the personal WhatsApp account, or treat test assets as a guaranteed permanent service.
 
 Cloud API is a business messaging interface requiring a Meta business portfolio, WhatsApp Business Account (WABA), and receiving business phone number. It is not an API for reading a normal personal WhatsApp account or its “message yourself” chat. Meta's test setup is the candidate way to try the integration without supplying another receiving number. Current test-number availability and restrictions must be recorded from the dashboard; the developer getting-started page could not be fetched during this research. [Meta's Cloud API overview and setup reference](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api), [Meta getting started](https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started).
 
@@ -20,7 +20,7 @@ Dashboard user access tokens expire after 24 hours. Meta also supports system-us
 
 ## Receiver contract
 
-The backend spike was deployed disabled on 7 September 2026 after 66 backend tests passed. Meta configuration and real delivery remain pending. The contract is:
+The backend spike was deployed disabled on 7 September 2026 after 66 backend tests passed. On 8 September it was enabled for the verified owner and Meta test receiving number, and Meta verified the callback. Real phone delivery remains pending. The contract is:
 
 - Public callback (replace the example origin with the private `CALENDAR_BACKEND_ORIGIN`): `https://your-calendar-service.example/webhooks/whatsapp`. GET verification compares `hub.verify_token` with the private configured value before returning `hub.challenge` for a subscription request.
 - POST requests require `X-Hub-Signature-256`, checked as HMAC-SHA256 over the **raw body** using the Meta app secret. The verification token and app secret serve different purposes.
@@ -46,7 +46,7 @@ If the test receiver proves unsuitable for ongoing use under the no-extra-number
 
 ## Acceptance record — pending
 
-- [ ] Meta offers a test receiver without another owned number or a purchase.
+- [x] Meta offers a test receiver without another owned number or a purchase.
 - [ ] The existing personal phone verifies and forwards text successfully.
 - [ ] Genuine signed delivery appears once in the private inbox; an unapproved sender cannot create a capture.
 - [ ] Actual forward/reply metadata is recorded without assuming missing context.
@@ -54,3 +54,13 @@ If the test receiver proves unsuitable for ongoing use under the no-extra-number
 - [ ] The user finds forwarding convenient enough to keep. If not, choose the no-number capture alternative before expanding WhatsApp work.
 
 Source limitation: Meta's developer pages repeatedly returned HTTP 429. Accessible Meta-maintained Postman references and the official WhatsApp pricing/help pages support the facts above; unverified dashboard, Coexistence and long-term test-asset behavior remain explicitly pending. No real message, credential or business identity has been stored in this document.
+
+## Account onboarding progress — 8 September 2026
+
+Rory completed developer registration, created the Rory Calendar business portfolio and app, and accepted the WhatsApp setup terms. The dashboard provisioned a Meta test phone number and displayed a five-recipient test limit. No owned receiving number or SIM was purchased or registered. The existing personal phone completed recipient verification and is selected in the test dashboard. Rory approved test-account access and the final Business Tools agreement. A temporary access token was generated for the current test account only. The dashboard reported that the one approved sample message was sent; handset delivery has not yet been confirmed. Rory completed the password re-entry check. The signing secret and receiver settings were saved in ignored server `.env` files with owner-only local permissions; the temporary access token stays local. Only the four receiving settings were added to the protected live environment, with a private rollback copy. The calendar service was restarted, its database identity and existing environment values were preserved, and the shared proxy was unchanged. Meta verified the callback and reports an active `messages` subscription (v26.0), with Rory Calendar subscribed to the test WABA alongside Meta’s existing dashboard app. The first real forward remains pending. Test-number provisioning alone does not establish inbound delivery or permanent availability.
+
+A bounded server check found the calendar service active, the receiver correctly disabled (HTTP 404), and zero current memory-pressure averages. The normal calendar and unrelated workloads were unchanged. Account identifiers and the intended sender restriction are saved only in ignored local operations data.
+
+A subsequent bounded check found the calendar service active at approximately 160 MiB, with zero current memory-pressure averages. The TradeR paper-session timer was observed active again; this WhatsApp setup did not change it. Do not assume the historical TradeR pause still describes current server state.
+
+Receiver acceptance checks on 8 September: public verification returns the exact challenge (200), a correctly signed empty envelope returns 200 without adding records, and an unsigned envelope returns 401. Authenticated status reports the receiver configured, with automatic interpretation and replies disabled. The dashboard also warns that unpublished apps do not receive production data, including from admins/testers; whether this restricts the provided test assets must be resolved by the real-forward check. The app was not published and no payment or owned-number setup was performed.
