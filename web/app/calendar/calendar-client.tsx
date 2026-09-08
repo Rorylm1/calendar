@@ -1,6 +1,7 @@
 'use client';
 import { signOut } from 'next-auth/react';
 import { api } from '@/lib/client-api';
+import { createRefreshQueue } from '@/lib/refresh-queue';
 import { stopDeviceNotifications } from '@/lib/push-client';
 import DeliverySettings from './delivery-settings';
 
@@ -8,6 +9,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type SyntheticEvent,
@@ -302,6 +304,7 @@ export default function CalendarClient() {
   const [data, setData] = useState<CalendarState | null>(null);
   const [error, setError] = useState('');
   const [errorCode, setErrorCode] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionErrorCode, setActionErrorCode] = useState('');
   const [disconnectWarning, setDisconnectWarning] = useState('');
@@ -335,9 +338,10 @@ export default function CalendarClient() {
     setActionError('');
     setDisconnectWarning('');
   }, []);
-  const refresh = useCallback(async () => {
+  const refresh = useMemo(() => createRefreshQueue(async () => {
     if (signingOut.current) return;
     const number = ++requestNumber.current;
+    setRefreshing(true);
     try {
       const result = await api<CalendarState>('state');
       if (number === requestNumber.current) {
@@ -356,10 +360,11 @@ export default function CalendarClient() {
         setErrorCode(code);
         if (['sign_in_required', 'owner_only'].includes(code)) clearPrivate();
       }
+    } finally {
+      setRefreshing(false);
     }
-  }, [clearPrivate]);
+  }), [clearPrivate]);
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
       void refresh();
       const params = new URLSearchParams(window.location.search);
       if (params.get('review') === '1') { setModal('review'); window.history.replaceState(null, '', '/calendar'); }
@@ -377,8 +382,6 @@ export default function CalendarClient() {
         );
         window.history.replaceState(null, '', '/calendar');
       }
-    });
-    return () => cancelAnimationFrame(frame);
   }, [refresh]);
   const processing =
     data?.connection.status === 'syncing' ||
@@ -425,7 +428,7 @@ export default function CalendarClient() {
     setActionErrorCode('');
     try {
       await action();
-      await refresh();
+      await refresh(true);
     } catch (caught) {
       const code = (caught as { code?: string }).code || '';
       if (['sign_in_required', 'owner_only'].includes(code)) {
@@ -533,7 +536,9 @@ export default function CalendarClient() {
   );
   const connected =
     connection?.status === 'connected' || connection?.status === 'syncing';
-  const lastChecked = connection?.lastSyncAt
+  const lastChecked = !connection
+    ? error ? 'Connection unavailable' : 'Checking connection…'
+    : connection.lastSyncAt
     ? `Checked ${clockLabel(connection.lastSyncAt)}`
     : connected
       ? 'First check pending'
@@ -601,21 +606,22 @@ export default function CalendarClient() {
                   variant="ghost"
                   className="quiet-action"
                   onClick={() => setModal('review')}
+                  aria-label={`Review ${proposals.length} suggestions`}
                 >
                   <Inbox size={17} />
-                  Review
+                  <span>Review</span>
                   {proposals.length > 0 && (
                     <b className="personal-count">{proposals.length}</b>
                   )}
                 </Button>
                 <Button
                   variant="ghost"
-                  className="quiet-action"
+                  className="quiet-action personal-connections"
                   onClick={() => setModal('connections')}
-                  aria-label="Open Gmail connection"
+                  aria-label="Open connections and settings"
                 >
                   <Mail size={17} />
-                  <span>Gmail</span>
+                  <span>Connections</span>
                 </Button>
                 <Button variant="ghost" className="quiet-action personal-sign-out" aria-label="Sign out" disabled={busy} onClick={() => { signingOut.current = true; requestNumber.current++; clearPrivate(); setBusy(true); void Promise.race([stopDeviceNotifications().catch(() => undefined), new Promise(resolve => setTimeout(resolve, 3000))]).finally(() => { void signOut({ redirectTo: '/sign-in' }); }); }}>
                   <LogOut size={16} />
@@ -677,7 +683,7 @@ export default function CalendarClient() {
                     Sign in
                   </a>
                 ) : (
-                  <button onClick={() => void refresh()}>Try again</button>
+                  <button disabled={refreshing} onClick={() => void refresh()}>{refreshing ? 'Trying again…' : 'Try again'}</button>
                 )}
               </div>
             )}
@@ -941,7 +947,9 @@ export default function CalendarClient() {
                   </p>
                 </div>
                 <span className="connection-state">
-                  {connected
+                  {!connection
+                    ? error ? 'Unavailable' : 'Loading…'
+                    : connected
                     ? 'Connected'
                     : connection?.status === 'reconnect_required'
                       ? 'Reconnect'
@@ -1079,9 +1087,11 @@ export default function CalendarClient() {
                     onClick={connect}
                   >
                     <Mail size={16} />
-                    {connection?.status === 'reconnect_required'
-                      ? 'Reconnect Gmail'
-                      : 'Connect Gmail'}
+                    {!connection
+                      ? error ? 'Connection unavailable' : 'Checking connection…'
+                      : connection.status === 'reconnect_required'
+                        ? 'Reconnect Gmail'
+                        : 'Connect Gmail'}
                   </Button>
                 )}
               </div>
@@ -1160,14 +1170,16 @@ export default function CalendarClient() {
                 ))
               ) : (
                 <div className="review-empty">
-                  <Check size={30} />
-                  <h3>Nothing waiting on you.</h3>
+                  {!data && !error ? <Loader2 className="spinning" size={30} /> : <Check size={30} />}
+                  <h3>{!data ? error ? 'Suggestions unavailable.' : 'Loading suggestions…' : 'Nothing waiting on you.'}</h3>
                   <p>
-                    {connected
+                    {!connection
+                      ? error ? 'Try loading your calendar again to see your suggestions.' : 'Your saved suggestions will appear here.'
+                      : connected
                       ? 'New suggestions will appear after Gmail is checked.'
                       : 'Connect Gmail to bring your bookings into review.'}
                   </p>
-                  {!connected && (
+                  {data && !connected && (
                     <Button
                       className="primary-action"
                       onClick={() => setModal('connections')}

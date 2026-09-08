@@ -392,6 +392,9 @@
   .personal-header-actions .quiet-action > span {
     display: none;
   }
+  .personal-header-actions .personal-connections > span {
+    display: inline;
+  }
   .personal-calendar .day-cell {
     min-height: 80px;
   }

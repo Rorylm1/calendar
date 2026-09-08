@@ -6,10 +6,12 @@ const fail = (code: string, message: string, status: number) => json({ error: { 
 function backendFailureReason(error: unknown) {
   const value = error as { name?: string; code?: string; cause?: { code?: string } } | null;
   const code = value?.cause?.code || value?.code;
-  if (['TimeoutError', 'AbortError'].includes(value?.name || '') || ['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT'].includes(code || '')) return 'timeout';
+  if (['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT'].includes(code || '')) return 'connect_timeout';
+  if (['TimeoutError', 'AbortError'].includes(value?.name || '')) return 'request_timeout';
   if (['ENOTFOUND', 'EAI_AGAIN'].includes(code || '')) return 'dns';
   if (['CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'].includes(code || '')) return 'tls';
   if (['ECONNREFUSED', 'ECONNRESET', 'EPIPE'].includes(code || '')) return 'connection';
+  if (value?.name === 'SyntaxError') return 'invalid_response';
   return 'network';
 }
 const routeAllowed = (method: string, path: string) =>
@@ -42,20 +44,26 @@ export function createCalendarHandler(deps: { session: () => Promise<OwnerSessio
     const call = async (backendPath: string, method: string, body?: unknown) => {
       const attempts = method === 'GET' ? 2 : 1;
       for (let attempt = 1; attempt <= attempts; attempt++) {
+        const started = Date.now();
+        let phase: 'headers' | 'body' = 'headers';
         try {
           const response = await (deps.fetch || fetch)(`${backend.href.replace(/\/$/, '')}/v1/${backendPath}`, {
             method, headers: { Authorization: `Bearer ${settings.CALENDAR_SERVICE_TOKEN}`, 'Content-Type': 'application/json' },
             body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', signal: AbortSignal.timeout(method === 'GET' ? 10000 : 25000), redirect: 'manual',
           });
           if ([502, 503, 504].includes(response.status)) {
-            console.warn('calendar_backend_request_failed', { operation: method === 'GET' ? 'read' : 'write', reason: 'upstream_unavailable', attempt });
-            if (attempt < attempts) { await response.body?.cancel(); continue; }
+            console.warn('calendar_backend_request_failed', { operation: method === 'GET' ? 'read' : 'write', reason: 'upstream_unavailable', attempt, phase, elapsedMs: Date.now() - started });
+            await response.body?.cancel();
+            if (attempt < attempts) continue;
+            return { response, data: null };
           }
-          return response;
+          phase = 'body';
+          const data = await response.json() as { url?: string; state?: string; error?: { code?: string; message?: string } };
+          return { response, data };
         } catch (error) {
           // Fixed categories only: never log request bodies, URLs, identifiers,
           // credentials or raw provider/network error messages.
-          console.warn('calendar_backend_request_failed', { operation: method === 'GET' ? 'read' : 'write', reason: backendFailureReason(error), attempt });
+          console.warn('calendar_backend_request_failed', { operation: method === 'GET' ? 'read' : 'write', reason: backendFailureReason(error), attempt, phase, elapsedMs: Date.now() - started });
           if (attempt === attempts) throw error;
         }
       }
@@ -72,7 +80,7 @@ export function createCalendarHandler(deps: { session: () => Promise<OwnerSessio
         const codes = url.searchParams.getAll('code'); const code = codes[0];
         if (codes.length !== 1 || !code || code.length > 4096) return callbackRedirect('failed');
         const result = await call('gmail/callback', 'POST', { ownerId: settings.CALENDAR_OWNER_ID, state, code });
-        return callbackRedirect(result.ok ? 'connected' : 'failed');
+        return callbackRedirect(result.response.ok ? 'connected' : 'failed');
       }
       let body: unknown;
       if (request.method !== 'GET') {
@@ -81,9 +89,9 @@ export function createCalendarHandler(deps: { session: () => Promise<OwnerSessio
         try { body = text ? JSON.parse(text) : {}; } catch { return fail('invalid_input', 'Check the details and try again.', 400); }
       }
       if (path === 'gmail/connect') body = { ownerId: settings.CALENDAR_OWNER_ID };
-      const result = await call(path, request.method, body);
-      const data = await result.json() as { url?: string; state?: string; error?: { code?: string; message?: string } };
-      if (!result.ok) return fail(data.error?.code || 'service_error', data.error?.message || 'That action could not be completed. Please try again.', result.status >= 500 ? 503 : result.status);
+      const { response: result, data } = await call(path, request.method, body);
+      if (!result.ok) return fail(data?.error?.code || 'service_error', data?.error?.message || 'That action could not be completed. Please try again.', result.status >= 500 ? 503 : result.status);
+      if (!data) throw new Error('Backend response was empty');
       if (path === 'gmail/connect') {
         if (!data.url || !data.state || !/^[A-Za-z0-9_-]{32,256}$/.test(data.state) || new URL(data.url).origin !== 'https://accounts.google.com') return fail('connection_error', 'Google connection could not be started.', 502);
         const response = json({ url: data.url }); response.headers.set('Set-Cookie', stateCookie(data.state, 600)); return response;

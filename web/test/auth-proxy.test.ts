@@ -103,7 +103,22 @@ test('transient reads retry once, writes never replay, and diagnostics contain n
     assert.equal(calls, method === 'GET' ? 2 : 1); assert.equal(response.status, method === 'GET' ? 200 : 503);
   }
   assert.equal(logs.length, 2); assert.equal(JSON.stringify(logs).includes('Private URL'), false); assert.equal(JSON.stringify(logs).includes('synthetic-server-only-token'), false);
-  assert.deepEqual(logs[0], ['calendar_backend_request_failed', { operation: 'read', reason: 'connection', attempt: 1 }]);
+  assert.equal(logs[0]![0], 'calendar_backend_request_failed');
+  assert.deepEqual({ ...(logs[0]![1] as object), elapsedMs: 0 }, { operation: 'read', reason: 'connection', attempt: 1, phase: 'headers', elapsedMs: 0 });
+});
+
+test('a failed read body retries and has distinct diagnostics from connection deadlines', async context => {
+  const logs: unknown[][] = []; context.mock.method(console, 'warn', (...args: unknown[]) => logs.push(args));
+  let calls = 0;
+  const handle = createCalendarHandler({ session: async () => owner, settings: () => settings, fetch: async () => {
+    if (++calls === 1) return new Response(new ReadableStream({ start(controller) { controller.error(new DOMException('Do not log body details', 'TimeoutError')); } }));
+    return Response.json({ events: [], proposals: [] });
+  } });
+  const response = await handle(new Request('https://calendar.example.test/api/calendar/state'), { params: Promise.resolve({ path: ['state'] }) });
+  assert.equal(response.status, 200); assert.equal(calls, 2);
+  assert.equal((logs[0]![1] as { reason: string }).reason, 'request_timeout');
+  assert.equal((logs[0]![1] as { phase: string }).phase, 'body');
+  assert.equal(JSON.stringify(logs).includes('Do not log'), false);
 });
 test('gateway failures can retry a read but never replay a calendar write', async context => {
   context.mock.method(console, 'warn', () => undefined);

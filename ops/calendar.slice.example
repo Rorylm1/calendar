@@ -1,0 +1,7 @@
+[Unit]
+Description=Personal calendar services
+
+[Slice]
+# Protect the small serving footprint from reclaim by unrelated batch jobs.
+# This is best-effort protection, not a reservation or a new allocation.
+MemoryLow=320M

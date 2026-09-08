@@ -2,6 +2,12 @@
 
 Implemented on 7 September 2026. The app's Connections panel now offers a private Apple Calendar subscription and optional grouped review alerts. Both remain off until the owner enables them. Physical iPhone acceptance is still pending.
 
+## Where to enable it
+
+On your iPhone, open [the live calendar](https://rory-calendar.vercel.app/calendar) and sign in. Tap **Connections** in the top bar, then scroll to **On your iPhone Calendar**. Choose **Create private link**, then **Add to Apple Calendar** and subscribe. In Apple's Calendar app, open **Calendars**, tap the information button beside this subscription, and turn on **Event Alerts** if you want reminders. Older versions of our interface labelled the Connections button **Gmail**.
+
+The subscription and notification sections load independently. A notification-settings failure does not hide a successfully loaded subscription. Failed settings show an error and a **Reload settings** control rather than continuing to claim they are loading.
+
 ## Private subscription
 
 Create a private link, then choose Add to Apple Calendar. The link contains a random 256-bit secret and gives its holder read access to confirmed plan titles, dates, locations and notes. The separate booking-reference field, source messages and proposal evidence are excluded; notes may still contain information the owner has included. Treat the URL as a credential. It is encrypted at rest and never put into ordinary application logs or public documentation.
