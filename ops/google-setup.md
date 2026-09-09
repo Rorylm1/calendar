@@ -11,7 +11,7 @@ Configure the callback URL of the deployed frontend exactly:
 
 Set `GOOGLE_REDIRECT_URI` on the backend to the callback currently in use. Configure your actual homepage, privacy notice and authorized domains in Google Auth Platform. The information pages may be public; the calendar and its API must remain restricted to the configured owner. The frontend login identity and Gmail mailbox can be different, and both must be configured explicitly.
 
-Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GMAIL_ALLOWED_EMAIL` in the backend's private environment. The backend verifies the connected Gmail profile against that exact mailbox and rejects other accounts. It stores granted Google credentials encrypted in its database. Never publish credentials, OAuth codes, consent URLs, private account addresses or mailbox data.
+Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GMAIL_ALLOWED_EMAIL` in the backend's private environment. This selects the original mailbox. Additional inboxes are explicitly requested in Connections; each OAuth state binds its requested email, and the callback verifies the actual Gmail profile before storing it separately. The original calendar sign-in allowlist is unchanged. It stores granted Google credentials encrypted in its database. Never publish credentials, OAuth codes, consent URLs, private account addresses or mailbox data.
 
 ## Consent and quota
 
@@ -21,6 +21,6 @@ Check the quotas shown for your actual Cloud project. The backend paces reads, r
 
 ## Verification
 
-After connecting, verify the expected connection state and inspect review suggestions. Confirm that no event is created without the owner's approval. Check useful bookings, adverts, ambiguous invitations, replies, duplicates, amendments and cancellations; account connection and synthetic tests do not establish broad interpretation accuracy.
+After connecting, verify the expected inbox state and inspect automatically added bookings/invitations and Needs details exceptions. Confirm that missing facts do not become invented events and that duplicate bookings received in two inboxes appear only once. Check useful bookings, adverts, ambiguous invitations, replies, duplicates, amendments and cancellations; account connection and synthetic tests do not establish broad interpretation accuracy.
 
 Local credentials are stored in ignored `server/.env`; an optional deployment copy is `server/.env.production`. Restrict these files to their owner. The deployment helper uses `/etc/my-calendar/calendar.env` on the server. The frontend receives only its own backend service credential. Original installation details remain in ignored `ops/local/`.

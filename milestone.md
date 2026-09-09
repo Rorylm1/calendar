@@ -230,3 +230,13 @@ The milestone numbers identify work areas, not the current execution order. The 
 Keep native iPhone development, two-way calendar synchronization, task lists, recurring-event series, image/voice/PDF extraction, live transport status, fare tracking, travel purchases, automatic RSVPs, and multiple real users outside these milestones.
 
 Account setup and implementation are now authorized. Purchases still require explicit authorization. Real account and device checks must be distinguished from tests with fictional data.
+
+## Additional inbox milestone — 9 September 2026
+
+- [x] Support separate Gmail consent, encrypted credentials, import state and hourly schedules in the same calendar.
+- [x] Preserve original inbox IDs/checkpoint and avoid a new original-inbox import.
+- [x] Test cross-inbox message-ID collisions, shared booking deduplication, failure isolation, targeted disconnect, stale token refresh and owner-bound authorization.
+- [x] Deploy backend and Connections UI with individual inbox controls; verify the original connection and saved calendar remain intact.
+- [ ] Complete the second inbox's Google sign-in/consent and verify its first import contributes to the existing calendar.
+
+The existing sign-in identity, private iPhone feed, WhatsApp receiver and monthly model budget remain shared and unchanged.
