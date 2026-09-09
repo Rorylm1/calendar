@@ -167,7 +167,9 @@ export class CalendarWorker {
           source.whatsapp = { ...source.whatsapp, imageRead: true, imageUnclear: reading.unclear, imageReason: reading.reason };
           this.store.replaceSource(source); this.store.remove('whatsapp_media_error');
         }
-        const manualWhatsApp = source.channel === 'whatsapp' && (source.unsupportedAttachments.length > 0 || source.whatsapp?.imageUnclear || source.whatsapp?.imageRead && !source.text.trim());
+        // A partial description does not invalidate a readable title and date.
+        // Let extraction assess individual missing facts from any readable text.
+        const manualWhatsApp = source.channel === 'whatsapp' && (source.unsupportedAttachments.length > 0 || source.whatsapp?.imageRead && !source.text.trim());
         if (manualWhatsApp) {
           this.store.transaction(() => {
             this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: source.whatsapp?.imageReason || 'This attachment could not be read. Enter the booking details.' }, attendance: 'unknown', reason: 'The forwarded image or attachment needs clearer details before an event can be added.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] });

@@ -104,3 +104,20 @@ test('an explicit dated reply can resolve one safely matched missing-date invita
     assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.attendance, 'invited'); assert.equal(f.store.proposals().filter(p => p.status === 'pending').length, 0);
   } finally { f.store.close(); }
 });
+
+test('a collapsed screenshot description still extracts a visible dated invitation', async () => {
+  const visible = 'Woodland Social\n12/09/2026\nSave the date... Read more';
+  const f = setup({ ...interpreter(output(fields({ title: 'Woodland Social', date: '2026-09-12', time: undefined }), { attendance: 'invited', evidence: ['Woodland Social', '12/09/2026'] })), readImage: async () => ({ text: visible, unclear: true, reason: 'Description behind Read more' }) }, async () => 'data:image/png;base64,synthetic');
+  try {
+    f.capture('collapsed', { type: 'image', image: { id: '333', mime_type: 'image/png' } }); await f.worker.process();
+    assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.title, 'Woodland Social'); assert.equal(f.store.events()[0]!.attendance, 'invited'); assert.equal(f.store.events()[0]!.date, '2026-09-12');
+    assert.equal(f.store.proposals().filter(p => p.status === 'pending').length, 0);
+  } finally { f.store.close(); }
+});
+test('a readable screenshot title is preserved when its date is actually missing', async () => {
+  const f = setup({ ...interpreter(output(fields({ title: 'Woodland Social', date: undefined }), { attendance: 'invited', evidence: ['Woodland Social'], unresolvedFields: ['date'] })), readImage: async () => ({ text: 'Woodland Social', unclear: true, reason: 'Date cropped' }) }, async () => 'data:image/png;base64,synthetic');
+  try {
+    f.capture('cropped-date', { type: 'image', image: { id: '333', mime_type: 'image/png' } }); await f.worker.process();
+    assert.equal(f.store.events().length, 0); assert.equal(f.store.proposals()[0]!.event.title, 'Woodland Social'); assert.deepEqual(f.store.proposals()[0]!.unresolvedFields, ['date']);
+  } finally { f.store.close(); }
+});
