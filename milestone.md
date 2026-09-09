@@ -182,9 +182,9 @@ The milestone numbers identify work areas, not the current execution order. The 
 - [ ] Apply safely matched forwarded changes and cancellations automatically, preserving owner edits. Explain that unseen changes in the original chat cannot be detected.
 
 - [x] Read JPEG/PNG screenshots through the existing model, with authenticated Meta downloads, bounded memory, cached encrypted transcription and the shared spending limit. Fictional hotel screenshot passed the live model check.
-- [ ] Verify a real phone-forwarded screenshot through Meta download → interpretation → calendar. PDF/document and voice-note reading remain unsupported.
+- [x] Verify a real phone-forwarded screenshot through Meta download → interpretation → calendar. PDF/document and voice-note reading remain unsupported.
 
-**Live verification:** Processing and screenshot access are enabled on the server; the Vercel update is deployed. The existing real fireworks forward was interpreted and routed to Needs details because “this year” has no original message timestamp. A real unambiguous dated forward and a phone-forwarded screenshot remain acceptance checks.
+**Live verification:** Processing and screenshot access are enabled on the server; the Vercel update is deployed. The existing real fireworks forward was interpreted and routed to Needs details because “this year” has no original message timestamp. On 9 September a real screenshot completed Meta download, Gemini reading and automatic invitation creation after correcting the collapsed-description gate. Its date, location, description and INVITATION: label were also verified in the enabled private iPhone feed. Actual device refresh remains unverified.
 
 **Current limits:** Forwarded changes/cancellations require original chronology in Needs details. Ambiguous relative dates are never guessed. Explicit replies can complete one safely matched pending candidate; unrelated chat messages are not merged. Renewed media credentials expire after about 60 days; ongoing renewal and test-number longevity remain operational acceptance work.
 
