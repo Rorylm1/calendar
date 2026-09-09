@@ -325,6 +325,8 @@ export default function CalendarClient() {
   const [actionError, setActionError] = useState('');
   const [actionErrorCode, setActionErrorCode] = useState('');
   const [disconnectWarning, setDisconnectWarning] = useState('');
+  const [newGmail, setNewGmail] = useState('');
+  const [disconnectAccount, setDisconnectAccount] = useState<{ id: string; email: string } | null>(null);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<
@@ -544,9 +546,9 @@ export default function CalendarClient() {
       setNotice(attendance === 'confirmed' ? 'Marked as going. No RSVP sent.' : 'Marked as an invitation. No RSVP sent.');
     });
   }
-  function connect() {
+  function connect(email?: string) {
     void act(async () => {
-      const result = await api<{ url: string }>('gmail/connect', 'POST', {});
+      const result = await api<{ url: string }>('gmail/connect', 'POST', email ? { email } : {});
       window.location.assign(result.url);
     });
   }
@@ -555,6 +557,7 @@ export default function CalendarClient() {
   const proposals = data?.proposals || [];
   const fieldsForProposal = (item: Proposal) => proposalFields(item, allEvents.find(event => event.id === item.targetEventId));
   const connection = data?.connection;
+  const gmailAccounts = data?.gmailAccounts || (connection?.email ? [{ id: 'default', email: connection.email, status: connection.status, lastSyncAt: connection.lastSyncAt, nextSyncAt: connection.nextSyncAt, error: connection.error, warning: connection.warning }] : []);
   const entries = onDate(events, selected);
   const first = new Date(view.year, view.month, 1);
   const offset = (first.getDay() + 6) % 7;
@@ -568,7 +571,7 @@ export default function CalendarClient() {
     (_, i) => new Date(view.year, view.month, i + 1 - offset),
   );
   const connected =
-    connection?.status === 'connected' || connection?.status === 'syncing';
+    gmailAccounts.some(account => account.status === 'connected' || account.status === 'syncing');
   const lastChecked = !connection
     ? error ? 'Connection unavailable' : 'Checking connection…'
     : connection.lastSyncAt
@@ -928,7 +931,7 @@ export default function CalendarClient() {
               : modal === 'review' || modal === 'proposal'
                 ? 'Plans are added automatically. These items need a little more information.'
                 : modal === 'disconnect'
-                  ? 'Saved plans remain in your calendar. New email checks will stop.'
+                  ? `Disconnect ${disconnectAccount?.email || connection?.email || 'this inbox'}? Saved plans remain. Other inboxes will keep checking.`
                   : modal === 'delete'
                     ? 'This removes it from your calendar. It does not cancel the booking.'
                     : 'Keep the details you need, close at hand.'}
@@ -985,7 +988,7 @@ export default function CalendarClient() {
                 <div>
                   <h3>Gmail</h3>
                   <p>
-                    {connection?.email || 'Your bookings, brought together.'}
+                    {gmailAccounts.length > 1 ? `${gmailAccounts.length} inboxes, one calendar.` : connection?.email || 'Your bookings, brought together.'}
                   </p>
                 </div>
                 <span className="connection-state">
@@ -1116,19 +1119,13 @@ export default function CalendarClient() {
                       <RefreshCw size={16} />
                       Check now
                     </Button>
-                    <Button
-                      className="quiet-action"
-                      variant="ghost"
-                      onClick={() => setModal('disconnect')}
-                    >
-                      Disconnect
-                    </Button>
+
                   </>
                 ) : (
                   <Button
                     className="primary-action"
                     disabled={busy || !connection?.configured}
-                    onClick={connect}
+                    onClick={() => connect()}
                   >
                     <Mail size={16} />
                     {!connection
@@ -1139,6 +1136,23 @@ export default function CalendarClient() {
                   </Button>
                 )}
               </div>
+              <div className="gmail-account-list">
+                {gmailAccounts.map(account => <section className="gmail-account" key={account.id} aria-label={`Gmail inbox ${account.email}`}>
+                  <div className="gmail-account-heading"><strong>{account.email}</strong><span>{account.status === 'syncing' ? 'Checking…' : account.status === 'reconnect_required' ? 'Reconnect needed' : 'Connected'}</span></div>
+                  <p className="connection-small">Last checked: {clockLabel(account.lastSyncAt)} · Checks hourly</p>
+                  {account.error && <p className="personal-inline-error">{account.error}</p>}
+                  {account.warning && <p className="connection-small">{account.warning}</p>}
+                  <div className="personal-actions">
+                    {account.status === 'reconnect_required' && <Button className="quiet-action" variant="ghost" disabled={busy} onClick={() => connect(account.email)}>Reconnect</Button>}
+                    <Button className="quiet-action" variant="ghost" disabled={busy} onClick={() => { setDisconnectAccount({ id: account.id, email: account.email }); setModal('disconnect'); }}>Disconnect this inbox</Button>
+                  </div>
+                </section>)}
+              </div>
+              <form className="gmail-add-form" onSubmit={event => { event.preventDefault(); connect(newGmail.trim()); }}>
+                <label htmlFor="additional-gmail">{gmailAccounts.length ? 'Add another Gmail inbox' : 'Gmail address'}</label>
+                <div className="gmail-add-controls"><input id="additional-gmail" type="email" required maxLength={254} autoComplete="email" placeholder="you@gmail.com" value={newGmail} onChange={event => setNewGmail(event.target.value)} disabled={busy} /><Button type="submit" className="quiet-action" variant="ghost" disabled={busy || !connection?.configured}>Connect inbox <ArrowUpRight size={14} /></Button></div>
+                <p className="connection-small">Choose this address in Google and allow read-only access. Your calendar sign-in stays the same.</p>
+              </form>
               <p className="connection-small">
                 Gmail access cannot send, delete, or edit your email. Matching
                 booking changes and cancellations update your calendar automatically.
@@ -1434,11 +1448,11 @@ export default function CalendarClient() {
                     const result = await api<{ warning?: string }>(
                       'gmail/disconnect',
                       'POST',
-                      {},
+                      { accountId: disconnectAccount?.id || 'default' },
                     );
                     setDisconnectWarning(result.warning || '');
                     setModal('connections');
-                    setNotice('Gmail disconnected. Your saved plans remain.');
+                    setNotice('Inbox disconnected. Your saved plans and other connections remain.');
                   })
                 }
               >

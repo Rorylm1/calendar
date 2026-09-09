@@ -13,12 +13,13 @@ import { registerFeedRoutes } from './calendar-feed.ts';
 import { registerWhatsAppRoutes, enqueueWhatsAppBacklog, whatsappStatus } from './whatsapp.ts';
 
 const Owner = z.string().min(1).max(240);
+const AccountId = z.string().regex(/^(default|g_[a-f0-9]{32})$/).default('default');
 const Revision = z.number().int().positive();
 export function buildApp(config: Config, overrides: { store?: Store; google?: GoogleGateway; worker?: CalendarWorker; schedule?: boolean } = {}) {
   const app = Fastify({ logger: false, bodyLimit: 128 * 1024, requestTimeout: 30_000, trustProxy: false });
   const store = overrides.store || new Store(config.CALENDAR_DB_PATH, config.CALENDAR_ENCRYPTION_KEY);
   const google = overrides.google || new GoogleGateway(config, store);
-  const worker = overrides.worker || new CalendarWorker(config, store, signal => google.connectedProvider(signal), new ModelInterpreter(config, store));
+  const worker = overrides.worker || new CalendarWorker(config, store, (signal, accountId) => google.connectedProvider(signal, accountId), new ModelInterpreter(config, store));
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options', 'nosniff');
     if (request.method === 'GET' && request.url === '/health') return;
@@ -40,9 +41,10 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
   registerFeedRoutes(app, config, store);
   const push = registerPushRoutes(app, config, store, { isBusy: () => worker.syncing || worker.processingStatus === 'processing' });
   app.get('/v1/state', async () => {
-    const connection = store.get<GmailConnection>('connection');
+    const accounts = store.gmailConnections();
+    const connection = accounts.find(c => c.id === 'default') || accounts[0];
     const counts = store.counts();
-    return { whatsapp: whatsappStatus(config, store), events: store.events(), proposals: store.proposals().filter(p => p.status === 'pending').sort((a, b) => b.createdAt.localeCompare(a.createdAt)), connection: {
+    return { gmailAccounts: accounts.map(c => ({ ...c, ownerId: undefined, historyId: undefined, status: worker.syncingAccountId === c.id ? 'syncing' : c.status })), whatsapp: whatsappStatus(config, store), events: store.events(), proposals: store.proposals().filter(p => p.status === 'pending').sort((a, b) => b.createdAt.localeCompare(a.createdAt)), connection: {
       status: !googleConfigured(config) ? 'not_configured' : worker.syncing ? 'syncing' : connection?.status || 'disconnected',
       email: connection?.email || null, lastSyncAt: connection?.lastSyncAt || null, nextSyncAt: connection?.nextSyncAt || null,
       ...counts, processingStatus: counts.pendingMessages && !config.OPENROUTER_API_KEY && worker.processingStatus === 'idle' ? 'paused_missing_key' : worker.processingStatus,
@@ -51,10 +53,10 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
       monthlySpendUsd: Math.round(store.spend() * 1e6) / 1e6, monthlyBudgetUsd: config.AI_MONTHLY_BUDGET_USD, configured: googleConfigured(config),
     } };
   });
-  app.post('/v1/gmail/connect', async request => { const body = z.object({ ownerId: Owner }).strict().parse(request.body); return google.connect(body.ownerId); });
-  app.post('/v1/gmail/callback', async request => { const body = z.object({ ownerId: Owner, code: z.string().min(1).max(4096), state: z.string().min(20).max(500) }).strict().parse(request.body); const result = await google.callback(body.ownerId, body.code, body.state); worker.kick(); return result; });
-  app.post('/v1/gmail/sync', async (_request, reply) => { const connection = store.get<GmailConnection>('connection'); if (!connection) throw new AppError('not_connected', 'Connect Gmail before checking for bookings.', 409); if (connection.status !== 'connected') throw new AppError('reconnect_required', 'Reconnect Gmail before checking for bookings.', 409); worker.kick(); return reply.status(202).send({ accepted: true }); });
-  app.post('/v1/gmail/disconnect', async () => { await worker.stop(); const result = await google.disconnect(); if (overrides.schedule !== false) worker.start(); return result; });
+  app.post('/v1/gmail/connect', async request => { const body = z.object({ ownerId: Owner, email: z.email().max(254).optional() }).strict().parse(request.body); return google.connect(body.ownerId, body.email); });
+  app.post('/v1/gmail/callback', async request => { const body = z.object({ ownerId: Owner, code: z.string().min(1).max(4096), state: z.string().min(20).max(500) }).strict().parse(request.body); const result = await google.callback(body.ownerId, body.code, body.state); worker.kick(false); return result; });
+  app.post('/v1/gmail/sync', async (_request, reply) => { const connections = store.gmailConnections(); if (!connections.length) throw new AppError('not_connected', 'Connect Gmail before checking for bookings.', 409); if (!connections.some(c => c.status === 'connected')) throw new AppError('reconnect_required', 'Reconnect Gmail before checking for bookings.', 409); worker.kick(); return reply.status(202).send({ accepted: true }); });
+  app.post('/v1/gmail/disconnect', async request => { const body = z.object({ accountId: AccountId }).strict().parse(request.body || {}); await worker.stop(); try { return await google.disconnect(body.accountId); } finally { if (overrides.schedule !== false) worker.start(); } });
   app.get('/v1/gmail/triage', async () => ({ entries: store.audit() }));
   app.post('/v1/gmail/retry-processing', async (_request, reply) => { store.retryFailures(); worker.kickProcessing(); return reply.status(202).send({ accepted: true }); });
   app.post('/v1/proposals/apply-pending', async request => { const body = z.object({ dryRun: z.boolean().default(true) }).strict().parse(request.body || {}); return store.autoApplyPending(body); });

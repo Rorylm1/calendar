@@ -6,6 +6,7 @@ import { Store } from './store.ts';
 import { AppError, ProviderError } from './errors.ts';
 import type { GmailConnection } from './domain.ts';
 import type { GmailMessage } from './mail.ts';
+import { gmailAccountId } from './gmail-accounts.ts';
 
 export type HistoryPage = { history?: { messagesAdded?: { message: { id: string } }[]; labelsAdded?: { message: { id: string } }[]; messages?: { id: string }[] }[]; historyId: string; nextPageToken?: string };
 export type ListPage = { messages?: { id: string }[]; nextPageToken?: string };
@@ -34,48 +35,50 @@ export class GmailReadPacer {
 export class GoogleGateway {
   private readonly readPacer: GmailReadPacer;
   constructor(private config: Config, private store: Store, private clientFactory?: () => OAuth2Client) { this.readPacer = new GmailReadPacer(config.GMAIL_REQUEST_INTERVAL_MS); }
-  private client(credentials?: Credentials, persist = true): OAuth2Client {
+  private client(credentials?: Credentials, persist = true, accountId = 'default'): OAuth2Client {
     const client = this.clientFactory?.() || new OAuth2Client({ clientId: this.config.GOOGLE_CLIENT_ID, clientSecret: this.config.GOOGLE_CLIENT_SECRET, redirectUri: this.config.GOOGLE_REDIRECT_URI, transporterOptions: { timeout: 20000, retry: false } });
     if (credentials) client.setCredentials(credentials);
-    if (persist) client.on('tokens', tokens => { const old = this.store.get<Credentials>('credentials') || credentials || {}; this.store.put('credentials', 'default', { ...old, ...tokens }); });
+    const generation = this.store.get<number>('oauth_generation', accountId) || 0;
+    if (persist) client.on('tokens', tokens => { if ((this.store.get<number>('oauth_generation', accountId) || 0) !== generation || !this.store.get('credentials', accountId)) return; const old = this.store.get<Credentials>('credentials', accountId) || credentials || {}; if (credentials?.refresh_token && old.refresh_token !== credentials.refresh_token) return; this.store.put('credentials', accountId, { ...old, ...tokens }); });
     return client;
   }
-  async connect(ownerId: string) {
+  async connect(ownerId: string, requestedEmail = this.config.GMAIL_ALLOWED_EMAIL) {
     if (!googleConfigured(this.config)) throw new AppError('not_configured', 'Gmail connection needs its Google OAuth settings.', 503);
-    const connection = this.store.get<GmailConnection>('connection');
-    if (connection && connection.ownerId !== ownerId) throw new AppError('wrong_owner', 'This calendar belongs to another owner.', 403);
-    const client = this.client(); const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync(); const state = randomBytes(32).toString('base64url');
-    this.store.createOAuthState(state, ownerId, codeVerifier);
-    return { state, url: client.generateAuthUrl({ scope: [scope], access_type: 'offline', prompt: 'consent', state, code_challenge: codeChallenge, code_challenge_method: CodeChallengeMethod.S256, login_hint: this.config.GMAIL_ALLOWED_EMAIL, include_granted_scopes: false }) };
+    const email = requestedEmail.trim().toLowerCase(); const accountId = gmailAccountId(email, this.config.GMAIL_ALLOWED_EMAIL);
+    if (this.store.gmailConnections().some(connection => connection.ownerId !== ownerId)) throw new AppError('wrong_owner', 'This calendar belongs to another owner.', 403);
+    const client = this.client(undefined, false); const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync(); const state = randomBytes(32).toString('base64url');
+    this.store.createOAuthState(state, ownerId, codeVerifier, Date.now(), { accountId, email, generation: this.store.get<number>('oauth_generation', accountId) || 0 });
+    return { state, url: client.generateAuthUrl({ scope: [scope], access_type: 'offline', prompt: 'consent', state, code_challenge: codeChallenge, code_challenge_method: CodeChallengeMethod.S256, login_hint: email, include_granted_scopes: false }) };
   }
   async callback(ownerId: string, code: string, state: string) {
-    const generation = this.store.get<number>('oauth_generation') || 0;
-    const verifier = this.store.consumeOAuthState(state, ownerId); const client = this.client(undefined, false);
+    const context = this.store.consumeOAuthContext(state, ownerId); const accountId = context.accountId || 'default'; const email = context.email || this.config.GMAIL_ALLOWED_EMAIL;
+    const generation = context.generation ?? (this.store.get<number>('oauth_generation', accountId) || 0);
+    const verifier = context.verifier; const client = this.client(undefined, false);
     let tokens: Credentials;
     try { tokens = (await client.getToken({ code, codeVerifier: verifier, redirect_uri: this.config.GOOGLE_REDIRECT_URI })).tokens; } catch { throw new AppError('oauth_failed', 'Gmail could not complete the connection. Start again.', 400); }
     client.setCredentials(tokens);
     let profile: { emailAddress: string; historyId: string };
     try { profile = await this.provider(client).profile(); } catch { await client.revokeToken(tokens.access_token || '').catch(() => {}); throw new AppError('oauth_failed', 'Gmail identity could not be verified. Start again.', 400); }
-    if (profile.emailAddress.toLowerCase() !== this.config.GMAIL_ALLOWED_EMAIL.toLowerCase()) { await client.revokeToken(tokens.refresh_token || tokens.access_token || '').catch(() => {}); throw new AppError('wrong_account', 'Connect the Gmail account configured for this calendar.', 403); }
+    if (profile.emailAddress.toLowerCase() !== email.toLowerCase()) { if (!this.store.gmailConnections().some(c => c.email.toLowerCase() === profile.emailAddress.toLowerCase())) await client.revokeToken(tokens.refresh_token || tokens.access_token || '').catch(() => {}); throw new AppError('wrong_account', 'Connect the Gmail account configured for this calendar.', 403); }
     if (!tokens.refresh_token) throw new AppError('offline_access_missing', 'Gmail did not grant offline access. Reconnect and grant consent.', 400);
-    const existing = this.store.get<GmailConnection>('connection');
-    if (existing && existing.ownerId !== ownerId) throw new AppError('wrong_owner', 'This calendar belongs to another owner.', 403);
+    const existing = this.store.get<GmailConnection>('connection', accountId);
+    if (this.store.gmailConnections().some(connection => connection.ownerId !== ownerId)) throw new AppError('wrong_owner', 'This calendar belongs to another owner.', 403);
     try { this.store.transaction(() => {
-      if ((this.store.get<number>('oauth_generation') || 0) !== generation) throw new AppError('oauth_cancelled', 'This connection was cancelled. Start again if you want to connect Gmail.', 409);
-      this.store.put('credentials', 'default', tokens);
-      this.store.put('connection', 'default', { ownerId, email: profile.emailAddress, status: 'connected', lastSyncAt: existing?.lastSyncAt || null, nextSyncAt: new Date().toISOString(), historyId: existing?.historyId, error: null, warning: existing?.warning || null } satisfies GmailConnection);
+      if ((this.store.get<number>('oauth_generation', accountId) || 0) !== generation) throw new AppError('oauth_cancelled', 'This connection was cancelled. Start again if you want to connect Gmail.', 409);
+      this.store.put('credentials', accountId, tokens);
+      this.store.put('connection', accountId, { ownerId, email: profile.emailAddress, status: 'connected', lastSyncAt: existing?.lastSyncAt || null, nextSyncAt: new Date().toISOString(), historyId: existing?.historyId, error: null, warning: existing?.warning || null } satisfies GmailConnection);
     }); } catch (error) { await client.revokeToken(tokens.refresh_token || tokens.access_token || '').catch(() => {}); throw error; }
     return { connected: true as const };
   }
-  connectedProvider(signal?: AbortSignal): GmailProvider {
-    const credentials = this.store.get<Credentials>('credentials'); if (!credentials) throw new AppError('not_connected', 'Connect Gmail to check for bookings.', 409);
-    return this.provider(this.client(credentials), signal);
+  connectedProvider(signal?: AbortSignal, accountId = 'default'): GmailProvider {
+    const credentials = this.store.get<Credentials>('credentials', accountId); if (!credentials) throw new AppError('not_connected', 'Connect Gmail to check for bookings.', 409);
+    return this.provider(this.client(credentials, true, accountId), signal);
   }
-  async disconnect() {
-    this.store.put('oauth_generation', 'default', (this.store.get<number>('oauth_generation') || 0) + 1);
-    const credentials = this.store.get<Credentials>('credentials'); let warning: string | undefined;
-    if (credentials) { try { await this.client(credentials).revokeToken(credentials.refresh_token || credentials.access_token || ''); } catch { warning = 'Local access was removed. Google could not confirm revocation; remove this app from your Google account permissions as well.'; } }
-    this.store.transaction(() => { this.store.remove('credentials'); this.store.remove('connection'); this.store.remove('scan'); this.store.clearSources(); this.store.db.exec("DELETE FROM oauth_states; DELETE FROM records WHERE bucket='triage'"); });
+  async disconnect(accountId = 'default') {
+    this.store.put('oauth_generation', accountId, (this.store.get<number>('oauth_generation', accountId) || 0) + 1);
+    const credentials = this.store.get<Credentials>('credentials', accountId); let warning: string | undefined;
+    if (credentials) { try { await this.client(credentials, false, accountId).revokeToken(credentials.refresh_token || credentials.access_token || ''); } catch { warning = 'Local access was removed. Google could not confirm revocation; remove this app from your Google account permissions as well.'; } }
+    this.store.transaction(() => { this.store.remove('credentials', accountId); this.store.remove('connection', accountId); this.store.remove('scan', accountId); this.store.clearSources(accountId); });
     return { disconnected: true as const, ...(warning ? { warning } : {}) };
   }
   private provider(client: OAuth2Client, signal?: AbortSignal): GmailProvider {

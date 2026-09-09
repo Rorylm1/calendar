@@ -129,3 +129,13 @@ test('gateway failures can retry a read but never replay a calendar write', asyn
     assert.equal(calls, method === 'GET' ? 2 : 1); assert.equal(response.status, method === 'GET' ? 200 : 503);
   }
 });
+
+test('adding a Gmail inbox forwards its address while preserving the fixed calendar owner', async () => {
+ const {request,calls}=fixture(owner,{url:`https://accounts.google.com/o/oauth2/v2/auth?state=${state}`,state});
+ const response=await request('gmail/connect','POST',{origin:settings.CALENDAR_APP_ORIGIN!},JSON.stringify({email:'second@gmail.com',ownerId:'forged'}));
+ assert.equal(response.status,200);assert.deepEqual(JSON.parse(String(calls[0]!.options?.body)),{ownerId:'legacy-owner-id',email:'second@gmail.com'});
+});
+test('invalid additional inbox addresses never reach the backend', async () => {
+ const {request,calls}=fixture(); const response=await request('gmail/connect','POST',{origin:settings.CALENDAR_APP_ORIGIN!},JSON.stringify({email:{ownerId:'forged'}}));
+ assert.equal(response.status,400);assert.equal(calls.length,0);
+});

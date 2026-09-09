@@ -33,6 +33,8 @@ export type Proposal = {
 };
 export type SourceMessage = {
   channel?: 'gmail' | 'whatsapp';
+  gmailAccountId?: string;
+  gmailEmail?: string;
   whatsapp?: { forwarded: boolean; mediaId?: string; mediaType?: string; mediaHash?: string; imageRead?: boolean; imageUnclear?: boolean; imageReason?: string };
   id: string; threadId: string; from: string; to: string; subject: string; receivedAt: string; sentByOwner: boolean;
   text: string; context: { id: string; from: string; sentByOwner: boolean; sentAt: string; text: string }[];

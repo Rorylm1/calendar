@@ -66,7 +66,9 @@ export type Connection = {
   monthlyBudgetUsd: number;
   configured: boolean;
 };
+export type GmailAccount = { id: string; email: string; status: 'connected' | 'syncing' | 'reconnect_required'; lastSyncAt: string | null; nextSyncAt: string; error: string | null; warning: string | null };
 export type CalendarState = {
+  gmailAccounts?: GmailAccount[];
   whatsapp?: { configured: boolean; contactNumber: string | null; processingEnabled: boolean; screenshotsConfigured: boolean; mediaError: string | null; capturedMessages: number; lastReceivedAt: string | null };
   events: CalendarEvent[];
   proposals: Proposal[];

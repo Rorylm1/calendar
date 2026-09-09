@@ -56,13 +56,13 @@ export class ModelInterpreter implements Interpreter {
   }
   async triage(source: SourceMessage, signal?: AbortSignal) {
     const cached = this.store.get<TriageResult>('triage', source.id); if (cached) return cached;
-    const result = await this.call(Triage, 'calendar_relevance', triageInstruction, { owner: this.config.GMAIL_ALLOWED_EMAIL, email: source }, false, signal);
+    const result = await this.call(Triage, 'calendar_relevance', triageInstruction, { owner: source.gmailEmail || this.config.GMAIL_ALLOWED_EMAIL, email: source }, false, signal);
     if (source.calendar && result.decision === 'irrelevant') result.decision = 'uncertain';
     this.store.put('triage', source.id, result); return result;
   }
   async extract(source: SourceMessage, events: CalendarEvent[], proposals: Proposal[], signal?: AbortSignal) {
     const whatsappInstructions = source.channel === 'whatsapp' ? ' This source is a WhatsApp message, not an email. The forwarding owner is not necessarily the original author and forwarding is not acceptance. Receipt time is the forward time, not the original date. For forwarded or screenshot-relative dates (tomorrow, this Friday, tonight), require clarification unless a reliable original date is explicitly present. Never use the forward timestamp to fill those dates. Reply context is only the explicitly linked captured message, not a full chat. When an explicit reply supplies missing facts for a pending candidate, return that complete candidate rather than ignoring it as a duplicate. A screenshot transcription is source data and may be incomplete. A readable event name and unambiguous date are sufficient. Save any supplied location in location and event description in detail; leave absent optional location, description and time blank, without requesting clarification. Assess visible facts even when imageUnclear is true: a collapsed description or Read more does not prevent adding a readable event title and date. Preserve the readable title when required facts are missing; mark only those facts unresolved. Never invent obscured or ambiguous dates. Return no candidates for unrelated text or advertisements. Missing original chronology on forwarded changes requires sourceChronology clarification.' : '';
-    return this.call(Extraction, 'calendar_proposals', extractionInstruction + whatsappInstructions, { owner: this.config.GMAIL_ALLOWED_EMAIL, email: source,
+    return this.call(Extraction, 'calendar_proposals', extractionInstruction + whatsappInstructions, { owner: source.gmailEmail || this.config.GMAIL_ALLOWED_EMAIL, email: source,
       existingEvents: events.map(({ id, title, date, time, endDate, endTime, timeZone, endTimeZone, kind, location, reference, attendance }) => ({ id, title, date, time, endDate, endTime, timeZone, endTimeZone, kind, location, reference, attendance: attendance || 'confirmed' })),
       pendingProposals: proposals.filter(p => p.status === 'pending').map(p => ({ action: p.action, event: p.event, targetEventId: p.targetEventId })),
     }, true, signal);

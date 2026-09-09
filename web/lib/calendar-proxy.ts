@@ -88,7 +88,11 @@ export function createCalendarHandler(deps: { session: () => Promise<OwnerSessio
         const text = await request.text(); if (Buffer.byteLength(text) > 32768) return fail('input_too_large', 'This entry is too long.', 413);
         try { body = text ? JSON.parse(text) : {}; } catch { return fail('invalid_input', 'Check the details and try again.', 400); }
       }
-      if (path === 'gmail/connect') body = { ownerId: settings.CALENDAR_OWNER_ID };
+      if (path === 'gmail/connect') {
+        const email = body && typeof body === 'object' && 'email' in body ? (body as { email?: unknown }).email : undefined;
+        if (email !== undefined && (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return fail('invalid_input', 'Enter a valid Gmail address.', 400);
+        body = { ownerId: settings.CALENDAR_OWNER_ID, ...(email ? { email } : {}) };
+      }
       const { response: result, data } = await call(path, request.method, body);
       if (!result.ok) return fail(data?.error?.code || 'service_error', data?.error?.message || 'That action could not be completed. Please try again.', result.status >= 500 ? 503 : result.status);
       if (!data) throw new Error('Backend response was empty');

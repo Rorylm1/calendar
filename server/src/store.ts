@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Vault, hash } from './crypto.ts';
 import { AppError, ProcessingPaused } from './errors.ts';
-import { confirmedFields, mergeFields, type CalendarEvent, type Fields, type Proposal, type SourceMessage, type EventPatch } from './domain.ts';
+import { confirmedFields, mergeFields, type GmailConnection, type CalendarEvent, type Fields, type Proposal, type SourceMessage, type EventPatch } from './domain.ts';
 import type { z } from 'zod';
 
 export type SourceStatus = 'fetched' | 'processing' | 'processed' | 'filtered' | 'failed';
@@ -264,14 +264,22 @@ export class Store {
     for (const row of this.db.prepare("SELECT id FROM sources WHERE status IN ('processed','filtered') AND captured_at<? AND (payload IS NOT NULL OR audit IS NOT NULL)").all(cutoff) as { id: string }[]) { this.remove('triage', row.id); if (row.id.startsWith('whatsapp:')) this.remove('whatsapp_spike_inbox', row.id.slice(9)); }
     this.db.prepare("UPDATE sources SET payload=NULL,audit=NULL WHERE status IN ('processed','filtered') AND captured_at < ?").run(cutoff); this.db.prepare('DELETE FROM oauth_states WHERE expires_at<?').run(now);
   }
-  clearSources() { this.db.exec("DELETE FROM sources WHERE id NOT LIKE 'whatsapp:%'"); }
+  gmailConnections(): (GmailConnection & { id: string })[] { return (this.db.prepare("SELECT id,payload FROM records WHERE bucket='connection' ORDER BY id").all() as { id: string; payload: string }[]).map(row => ({ ...this.vault.open<GmailConnection>(row.payload, `connection:${row.id}`), id: row.id })); }
+  clearSources(accountId = 'default') {
+    const condition = accountId === 'default' ? "id NOT LIKE 'whatsapp:%' AND id NOT LIKE 'gmail:%'" : 'substr(id,1,?)=?';
+    const prefix = `gmail:${accountId}:`; const args = accountId === 'default' ? [] : [prefix.length, prefix];
+    const rows = this.db.prepare(`SELECT id FROM sources WHERE ${condition}`).all(...args) as {id:string}[];
+    for (const row of rows) this.remove('triage', row.id);
+    this.db.prepare(`DELETE FROM sources WHERE ${condition}`).run(...args);
+  }
   audit(limit = 50) { return (this.db.prepare('SELECT id,status,audit FROM sources WHERE audit IS NOT NULL ORDER BY updated_at DESC LIMIT ?').all(limit) as { id: string; status: string; audit: string }[]).map(row => ({ id: row.id, status: row.status, ...this.vault.open<{ decision?: string; reason?: string; excerpt?: string; subject?: string }>(row.audit, `audit:${row.id}`) })); }
-  createOAuthState(state: string, ownerId: string, verifier: string, now = Date.now()) { const key = hash(state); this.db.prepare('INSERT INTO oauth_states VALUES(?,?,?)').run(key, now + 10 * 60000, this.vault.seal({ ownerId, verifier }, `oauth:${key}`)); }
-  consumeOAuthState(state: string, ownerId: string, now = Date.now()): string {
+  createOAuthState(state: string, ownerId: string, verifier: string, now = Date.now(), account?: { accountId: string; email: string; generation: number }) { const key = hash(state); this.db.prepare('INSERT INTO oauth_states VALUES(?,?,?)').run(key, now + 10 * 60000, this.vault.seal({ ownerId, verifier, ...account }, `oauth:${key}`)); }
+  consumeOAuthState(state: string, ownerId: string, now = Date.now()): string { return this.consumeOAuthContext(state, ownerId, now).verifier; }
+  consumeOAuthContext(state: string, ownerId: string, now = Date.now()) {
     return this.transaction(() => { const key = hash(state); const row = this.db.prepare('SELECT expires_at,payload FROM oauth_states WHERE hash=?').get(key) as { expires_at: number; payload: string } | undefined;
       if (!row || row.expires_at < now) throw new AppError('invalid_state', 'This connection link has expired. Start again.', 400);
-      const payload = this.vault.open<{ ownerId: string; verifier: string }>(row.payload, `oauth:${key}`); if (payload.ownerId !== ownerId) throw new AppError('invalid_state', 'This connection belongs to another session. Start again.', 400);
-      this.db.prepare('DELETE FROM oauth_states WHERE hash=?').run(key); return payload.verifier; });
+      const payload = this.vault.open<{ ownerId: string; verifier: string; accountId?: string; email?: string; generation?: number }>(row.payload, `oauth:${key}`); if (payload.ownerId !== ownerId) throw new AppError('invalid_state', 'This connection belongs to another session. Start again.', 400);
+      this.db.prepare('DELETE FROM oauth_states WHERE hash=?').run(key); return payload; });
   }
   spend(month = new Date().toISOString().slice(0, 7)): number { return Number((this.db.prepare('SELECT COALESCE(SUM(cost),0) amount FROM usage WHERE month=?').get(month) as { amount: number }).amount); }
   reserve(cost: number, budget: number): string { return this.transaction(() => { if (this.spend() + cost > budget) throw new ProcessingPaused('paused_budget'); const id = randomUUID(); this.db.prepare('INSERT INTO usage VALUES(?,?,?,?)').run(id, new Date().toISOString().slice(0, 7), cost, 'reserved'); return id; }); }

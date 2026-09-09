@@ -253,3 +253,7 @@ Current decisions, 8 September 2026: the prize remains reduced manual entry, Wha
 ## WhatsApp quick-forward contract — 9 September 2026
 
 Rory will quickly forward text or screenshots containing an event name and date. Those two readable, unambiguous facts are sufficient to add an event automatically. Preserve any visible location in the calendar location field and any supplied event description in its notes, including in the same private iPhone subscription. Time, description and location are optional; leave missing values blank. Collapsed descriptions or “Read more” must not block otherwise usable event facts. Preserve readable fields even when another required fact needs clarification. Keep the existing INVITATION: attendance rule; forwarding alone is not acceptance.
+
+## Multiple Gmail inboxes — 9 September 2026
+
+Each explicitly connected Gmail inbox contributes to the same personal calendar and iPhone feed. The calendar owner and sign-in identity remain unchanged. Each inbox has separate read-only consent, encrypted credentials, import progress and hourly scheduling. Message and thread IDs are scoped to the mailbox while duplicate bookings still use the shared event matcher. A failed connection does not prevent the other inbox from being checked. Disconnecting one inbox removes only its credentials and captured mail; saved events and other connections remain. Model spending and the request pacer are shared, and imports run sequentially to limit server load.
