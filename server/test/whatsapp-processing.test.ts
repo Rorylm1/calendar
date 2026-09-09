@@ -107,7 +107,7 @@ test('an explicit dated reply can resolve one safely matched missing-date invita
 
 test('a collapsed screenshot description still extracts a visible dated invitation', async () => {
   const visible = 'Woodland Social\n12/09/2026\nSave the date... Read more';
-  const f = setup({ ...interpreter(output(fields({ title: 'Woodland Social', date: '2026-09-12', time: undefined }), { attendance: 'invited', evidence: ['Woodland Social', '12/09/2026'] })), readImage: async () => ({ text: visible, unclear: true, reason: 'Description behind Read more' }) }, async () => 'data:image/png;base64,synthetic');
+  const f = setup({ ...interpreter(output(fields({ title: 'Woodland Social', date: '2026-09-12', time: undefined, location: '', detail: '' }), { attendance: 'invited', evidence: ['Woodland Social', '12/09/2026'] })), readImage: async () => ({ text: visible, unclear: true, reason: 'Description behind Read more' }) }, async () => 'data:image/png;base64,synthetic');
   try {
     f.capture('collapsed', { type: 'image', image: { id: '333', mime_type: 'image/png' } }); await f.worker.process();
     assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.title, 'Woodland Social'); assert.equal(f.store.events()[0]!.attendance, 'invited'); assert.equal(f.store.events()[0]!.date, '2026-09-12');
@@ -120,4 +120,20 @@ test('a readable screenshot title is preserved when its date is actually missing
     f.capture('cropped-date', { type: 'image', image: { id: '333', mime_type: 'image/png' } }); await f.worker.process();
     assert.equal(f.store.events().length, 0); assert.equal(f.store.proposals()[0]!.event.title, 'Woodland Social'); assert.deepEqual(f.store.proposals()[0]!.unresolvedFields, ['date']);
   } finally { f.store.close(); }
+});
+
+test('WhatsApp text and screenshots retain supplied location and description in the event and iPhone feed', async () => {
+  const title = 'Woodland Social'; const location = 'Pine Lodge, Shropshire'; const detail = 'Bring a picnic. Music in the woods.';
+  const visible = `${title}\n12 September 2026\n${location}\n${detail}`;
+  for (const image of [false, true]) {
+    const f = setup({ ...interpreter(output(fields({ title, date: '2026-09-12', time: undefined, location, detail }), { attendance: 'invited', evidence: [visible] })), readImage: async () => ({ text: visible, unclear: false, reason: '' }) }, async () => 'data:image/png;base64,synthetic');
+    try {
+      f.capture(image ? 'with-image-details' : 'with-text-details', image ? { type: 'image', image: { id: '333', mime_type: 'image/png' }, text: undefined } : { text: { body: visible } });
+      await f.worker.process();
+      assert.equal(f.store.events().length, 1); const saved = f.store.events()[0]!;
+      assert.equal(saved.title, title); assert.equal(saved.location, location); assert.equal(saved.detail, detail);
+      const feed = renderCalendarFeed(f.store).body;
+      assert.ok(feed.includes('LOCATION:Pine Lodge\\, Shropshire')); assert.ok(feed.includes(`DESCRIPTION:${detail}`)); assert.ok(feed.includes(`SUMMARY:INVITATION: ${title}`));
+    } finally { f.store.close(); }
+  }
 });

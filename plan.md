@@ -249,3 +249,7 @@ Defaults: Europe/London, Monday-start weeks, 24-hour display, optional grouped c
 Deferred: native iPhone app, two-way external calendar synchronization, task lists, recurring-event series, image/voice/PDF extraction, live transport information, fare monitoring, travel purchases, automatic RSVPs, booking changes with merchants, and access for other real users.
 
 Current decisions, 8 September 2026: the prize remains reduced manual entry, WhatsApp forwarding, and design craft. Rory and Codex are building from Edge, with Gmail deployed, a no-extra-owned-number WhatsApp spike next, and iPhone feed/push work pending device verification. The planned v1 iPhone integration is a one-way feed; eventual WhatsApp capture uses the same automatic-addition and missing-detail rules.
+
+## WhatsApp quick-forward contract — 9 September 2026
+
+Rory will quickly forward text or screenshots containing an event name and date. Those two readable, unambiguous facts are sufficient to add an event automatically. Preserve any visible location in the calendar location field and any supplied event description in its notes, including in the same private iPhone subscription. Time, description and location are optional; leave missing values blank. Collapsed descriptions or “Read more” must not block otherwise usable event facts. Preserve readable fields even when another required fact needs clarification. Keep the existing INVITATION: attendance rule; forwarding alone is not acceptance.
