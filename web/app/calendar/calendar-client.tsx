@@ -1198,7 +1198,7 @@ export default function CalendarClient() {
                     </details>
                     {item.unresolvedFields.length > 0 && (
                       <p className="proposal-unresolved">
-                        To check: {item.unresolvedFields.map(field => field === 'targetEventId' ? 'matching saved plan' : field).join(', ')}
+                        To check: {item.unresolvedFields.map(field => ({ dateTime: 'date or time needs clarification', ambiguousTimeZone: 'start time zone is unclear', ambiguousEndTimeZone: 'end time zone is unclear', timeZone: 'time zone', endTimeZone: 'end time zone', endTime: 'end time', endDate: 'end date', targetEventId: 'matching saved plan', targetIdentity: 'which saved plan to update', ownerEditedEvent: 'a change conflicts with your edits' } as Record<string, string>)[field] || field).join(', ')}
                       </p>
                     )}
                     <div className="suggestion-actions">

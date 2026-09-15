@@ -8,6 +8,7 @@ import { gmailSourceId } from './gmail-accounts.ts';
 import { downloadWhatsAppImage, WhatsAppMediaError } from './whatsapp-media.ts';
 import { Extraction, ImageReading, type Interpreter } from './interpreter.ts';
 import { resolveWhatsAppYear } from './whatsapp-policy.ts';
+import { normalizeSourceTimeZones } from './time-zones.ts';
 
 type Scan = { mode: 'initial' | 'history' | 'recovery'; baseline: string; query?: string; pageToken?: string; pageIds?: string[]; nextPageToken?: string; finalHistoryId?: string };
 const CHECK_INTERVAL = 4 * 60 * 60 * 1000;
@@ -207,7 +208,8 @@ export class CalendarWorker {
         const proposals: Omit<Proposal, 'id' | 'createdAt' | 'revision' | 'status'>[] = [];
         for (const candidate of output.proposals) {
           const rawFields = Object.fromEntries(Object.entries({ ...candidate.event, time: minuteTime(candidate.event.time), endTime: minuteTime(candidate.event.endTime) }).filter(([, value]) => value !== null));
-          const parsed = EventFields.parse(rawFields);
+          const zones = normalizeSourceTimeZones({ timeZone: candidate.event.timeZone || undefined, endTimeZone: candidate.event.endTimeZone || undefined }, `${sourceCorpus(source)}\n${candidate.event.title}\n${candidate.event.location}`);
+          const parsed = EventFields.parse({ ...rawFields, timeZone: zones.event.timeZone, endTimeZone: zones.event.endTimeZone });
           const { event, inferredYear } = source.channel === 'whatsapp' && candidate.action === 'create' ? resolveWhatsAppYear(parsed, source) : { event: parsed, inferredYear: false };
           const target = candidate.targetEventId ? events.find(x => x.id === candidate.targetEventId) : undefined;
           const corpus = sourceCorpus(source).replace(/\s+/g, ' ').toLowerCase();
@@ -216,7 +218,7 @@ export class CalendarWorker {
           const relativeForward = source.channel === 'whatsapp' && (source.whatsapp?.forwarded || source.whatsapp?.mediaId) && /\b(tomorrow|today|tonight|yesterday|(?:next|this|last)\s+(?:week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i.test(source.text);
           if (relativeForward) { delete event.date; delete event.endDate; }
           const yearOnly = inferredYear && !relativeForward && candidate.unresolvedFields.some(field => ['year', 'originalDate'].includes(field));
-          const unresolvedFields = [...new Set([...candidate.unresolvedFields.filter(field => !(yearOnly && ['year', 'originalDate', 'date'].includes(field))), ...(relativeForward ? ['originalDate', 'date'] : []), ...(source.whatsapp?.forwarded && candidate.action !== 'create' ? ['sourceChronology'] : []), ...(!event.date ? ['date'] : []), ...(candidate.action !== 'create' && !target ? ['targetEventId'] : [])])];
+          const unresolvedFields = [...new Set([...candidate.unresolvedFields.filter(field => !(yearOnly && ['year', 'originalDate', 'date'].includes(field))), ...zones.unresolved, ...(relativeForward ? ['originalDate', 'date'] : []), ...(source.whatsapp?.forwarded && candidate.action !== 'create' ? ['sourceChronology'] : []), ...(!event.date ? ['date'] : []), ...(candidate.action !== 'create' && !target ? ['targetEventId'] : [])])];
           proposals.push({ ...(source.channel === 'whatsapp' ? { source: 'WhatsApp' as const } : {}), action: candidate.action, ...(target ? { targetEventId: target.id, targetRevision: target.revision } : {}), event, attendance: source.channel === 'whatsapp' ? 'confirmed' : candidate.attendance, reason: candidate.reason.slice(0, 1200), evidence, unresolvedFields, sourceMessageIds: [source.id] });
         }
         this.store.transaction(() => {

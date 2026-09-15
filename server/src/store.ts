@@ -6,6 +6,7 @@ import { Vault, hash } from './crypto.ts';
 import { AppError, ProcessingPaused } from './errors.ts';
 import { confirmedFields, mergeFields, type GmailConnection, type CalendarEvent, type Fields, type Proposal, type SourceMessage, type EventPatch } from './domain.ts';
 import type { z } from 'zod';
+import { normalizeSourceTimeZones } from './time-zones.ts';
 
 export type SourceStatus = 'fetched' | 'processing' | 'processed' | 'filtered' | 'failed';
 export type EventExportMetadata = { revision: number; createdAt: string; modifiedAt: string };
@@ -186,6 +187,17 @@ export class Store {
     return this.db.isTransaction ? write() : this.transaction(write);
   }
   private applyAutomatically(proposal: Proposal): keyof AutoApplySummary {
+    const context = [proposal.event.title, proposal.event.location, ...proposal.evidence, ...proposal.sourceMessageIds.flatMap(id => { const source = this.source(id); return source ? [source.text, ...source.context.map(item => item.text)] : []; })].join('\n');
+    const zones = normalizeSourceTimeZones(proposal.event, context);
+    let flags = [...new Set([...proposal.unresolvedFields, ...zones.unresolved])];
+    // Re-evaluate a historical validation flag after normalizing the source
+    // zone. A real invalid date, end-before-start or DST conflict stays blocked.
+    if (!zones.unresolved.length && flags.includes('dateTime')) {
+      try { confirmedFields({ ...zones.event, ...(zones.event.time || zones.event.endTime ? { timeZone: zones.event.timeZone || 'Europe/London' } : {}) }); flags = flags.filter(field => field !== 'dateTime'); } catch { /* still needs details */ }
+    }
+    if (!sameValue(zones.event, proposal.event) || !sameValue(flags, proposal.unresolvedFields)) {
+      proposal.event = zones.event; proposal.unresolvedFields = flags; proposal.revision++; this.put('proposals', proposal.id, proposal);
+    }
     const needs = (field?: string): 'needsDetails' => {
       if (field && !proposal.unresolvedFields.includes(field)) { proposal.unresolvedFields.push(field); proposal.revision++; this.put('proposals', proposal.id, proposal); }
       return 'needsDetails';

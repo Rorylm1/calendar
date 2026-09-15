@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import { AppError } from './errors.ts';
 import { Temporal } from '@js-temporal/polyfill';
+import { supportedTimeZone } from './time-zones.ts';
 
 export const DateValue = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const date = new Date(`${value}T12:00:00Z`);
   return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 }, 'Use a real calendar date');
 export const TimeValue = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
-export const ZoneValue = z.string().max(100).refine(value => { try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; } }, 'Unknown time zone');
+export const ZoneValue = z.string().max(100).refine(supportedTimeZone, 'Use a full time zone such as Europe/London, or an explicit UTC offset');
 export const Kind = z.enum(['food', 'travel', 'stay', 'social', 'appointment', 'other']);
 // Undefined uses the timed-event default. Null explicitly disables reminders.
 export const ReminderMinutes = z.number().int().min(0).max(10080).nullable();
