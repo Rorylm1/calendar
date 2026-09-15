@@ -18,7 +18,7 @@ Use Node 24, run `npm ci`, copy `.env.example` to `.env.local`, and supply the s
 | `AUTH_GOOGLE_ID` | Google OAuth web client ID. |
 | `AUTH_GOOGLE_SECRET` | Its private client secret. |
 
-No `NEXT_PUBLIC_*` credentials are used. Keep real environment files out of Git. Vercel's project root should be `web`, with the Next.js framework preset and Node24. The backend and its hourly worker remain separate services; the frontend does not run mailbox scans itself.
+No `NEXT_PUBLIC_*` credentials are used. Keep real environment files out of Git. Vercel's project root should be `web`, with the Next.js framework preset and Node24. The backend and its four-hourly worker remain separate services; the frontend does not run mailbox scans itself.
 
 ## Google callbacks and access
 

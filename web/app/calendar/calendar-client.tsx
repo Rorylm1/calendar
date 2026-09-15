@@ -1022,7 +1022,7 @@ export default function CalendarClient() {
               <dl className="connection-facts">
                 <div>
                   <dt>Check frequency</dt>
-                  <dd>Every hour</dd>
+                  <dd>Every 4 hours</dd>
                 </div>
                 <div>
                   <dt>First check</dt>
@@ -1141,7 +1141,7 @@ export default function CalendarClient() {
               <div className="gmail-account-list">
                 {gmailAccounts.map(account => <section className="gmail-account" key={account.id} aria-label={`Gmail inbox ${account.email}`}>
                   <div className="gmail-account-heading"><strong>{account.email}</strong><span>{account.status === 'syncing' ? 'Checking…' : account.status === 'reconnect_required' ? 'Reconnect needed' : 'Connected'}</span></div>
-                  <p className="connection-small">Last checked: {clockLabel(account.lastSyncAt)} · Checks hourly</p>
+                  <p className="connection-small">Last checked: {clockLabel(account.lastSyncAt)} · Checks every 4 hours</p>
                   {account.error && <p className="personal-inline-error">{account.error}</p>}
                   {account.warning && <p className="connection-small">{account.warning}</p>}
                   <div className="personal-actions">

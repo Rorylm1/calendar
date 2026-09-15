@@ -160,12 +160,32 @@ test('a successful bounded import continues automatically using its saved query,
     const result = store.get<GmailConnection>('connection')!; assert.ok(result.lastSyncAt); assert.equal(result.warning, null); assert.equal(result.error, null); assert.ok(Date.parse(result.nextSyncAt) > Date.now() + 3500000); assert.equal(store.counts().pendingMessages, 1); assert.equal(store.spend(), 0);
   } finally { await worker.stop(); store.close(); }
 });
+test('completed inboxes adopt four-hour scheduling on restart; manual checks remain available', async () => {
+  const { config, store } = fixture();
+  const lastSyncAt = new Date(Date.now() - 2 * 3600000).toISOString();
+  const oldNext = new Date(Date.parse(lastSyncAt) + 3600000).toISOString();
+  for (const id of ['default', 'second']) store.put('connection', id, { ...connection('100'), lastSyncAt, nextSyncAt: oldNext });
+  let calls = 0;
+  const worker = new CalendarWorker(config, store, () => provider({ history: async () => { calls++; return { historyId: '200', history: [] }; } }), interpreter());
+  try {
+    worker.start();
+    for (const account of store.gmailConnections()) assert.equal(Date.parse(account.nextSyncAt) - Date.parse(account.lastSyncAt!), 4 * 3600000);
+    await worker.run(false); assert.equal(calls, 0, 'The previous hourly deadline must not trigger a check');
+    await worker.run(true); assert.equal(calls, 2, 'Check now still checks both inboxes');
+    for (const account of store.gmailConnections()) {
+      const delay = Date.parse(account.nextSyncAt) - Date.parse(account.lastSyncAt!);
+      assert.ok(delay >= 4 * 3600000 && delay < 4 * 3600000 + 1000);
+      assert.equal(account.historyId, '200');
+    }
+  } finally { await worker.stop(); store.close(); }
+});
 test('a failed saved import waits for the next check instead of repeatedly continuing', async () => {
   const { config, store } = fixture(); store.put('connection', 'default', connection()); let calls = 0;
   const gmail = provider({ list: async () => { calls++; throw new ProviderError(403, false, true, 0, 'rateLimitExceeded'); } });
   const worker = new CalendarWorker(config, store, () => gmail, interpreter());
   try {
     await worker.run(); assert.equal(calls, 1); assert.ok(store.get('scan')); assert.match(store.get<GmailConnection>('connection')!.error!, /Gmail is limiting/);
+    assert.ok(Date.parse(store.get<GmailConnection>('connection')!.nextSyncAt) > Date.now() + 4 * 3600000 - 1000);
     assert.equal(store.get<{ rateLimitReason: string }>('capture_diagnostic')!.rateLimitReason, 'rateLimitExceeded');
     worker.start(); await new Promise(resolve => setTimeout(resolve, 650)); assert.equal(calls, 1);
   } finally { await worker.stop(); store.close(); }

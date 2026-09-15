@@ -17,7 +17,7 @@ Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GMAIL_ALLOWED_EMAIL` in the 
 
 Complete Google's consent screen directly as the account holder. An unverified personal-use application may show a warning; production status does not mean Google has verified the application or approved general public onboarding. Follow Google's [web-server OAuth guidance](https://developers.google.com/identity/protocols/oauth2/web-server) and [restricted-scope verification guidance](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification) when choosing testing or production status.
 
-Check the quotas shown for your actual Cloud project. The backend paces reads, retries retryable quota responses and preserves its checkpoint through interruptions. Initial import batches can continue without triggering a new mailbox scan; regular checks remain hourly after the import completes. [Gmail quota documentation](https://developers.google.com/workspace/gmail/api/reference/quota) explains method-level costs.
+Check the quotas shown for your actual Cloud project. The backend paces reads, retries retryable quota responses and preserves its checkpoint through interruptions. Initial import batches can continue without triggering a new mailbox scan; regular checks remain four-hourly after the import completes. [Gmail quota documentation](https://developers.google.com/workspace/gmail/api/reference/quota) explains method-level costs.
 
 ## Verification
 

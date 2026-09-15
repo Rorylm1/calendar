@@ -253,3 +253,7 @@ The existing sign-in identity, private iPhone feed, WhatsApp receiver and monthl
 Live inbox check on 15 September: original Gmail connected, 50 saved events, no failed or pending messages. The enabled private ICS subscription also exports 50 events. Second inbox sign-in passed the passkey step and now awaits the owner's completion of Google's unverified-app warning and read-only consent; no second-inbox import has happened yet.
 
 Release verification: backend `20260915T085324Z`, source commit `feba4d2`, Vercel production check successful under Rory's existing project. Online off-host backup passed restoration verification before release. Live environment, persistent database identity and shared proxy were preserved. Production merge route was checked with nonexistent IDs (safe `not_found`); actual merge-to-feed behavior was verified with fictional integration-test data.
+
+## Gmail check frequency — 15 September 2026
+
+Rory requested checks every four hours to reduce activity and cost. Both inboxes use this cadence (six scheduled checks per day per inbox), including error retries. Existing completed inbox schedules are extended from their last successful check on restart. Initial import continuation, WhatsApp delivery and explicit Check now remain available. Model costs mainly depend on new messages interpreted; reducing check frequency does not imply a 75% reduction in model spending.

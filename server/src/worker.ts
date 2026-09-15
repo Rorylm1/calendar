@@ -9,7 +9,7 @@ import { downloadWhatsAppImage, WhatsAppMediaError } from './whatsapp-media.ts';
 import { Extraction, ImageReading, type Interpreter } from './interpreter.ts';
 
 type Scan = { mode: 'initial' | 'history' | 'recovery'; baseline: string; query?: string; pageToken?: string; pageIds?: string[]; nextPageToken?: string; finalHistoryId?: string };
-const HOUR = 3600000;
+const CHECK_INTERVAL = 4 * 60 * 60 * 1000;
 // Models sometimes spell minute-precision times with zero seconds. This is
 // lossless; nonzero seconds and malformed times still fail domain validation.
 const minuteTime = (value: string | null) => value && /^(?:[01]\d|2[0-3]):[0-5]\d:00$/.test(value) ? value.slice(0, 5) : value;
@@ -27,7 +27,19 @@ export class CalendarWorker {
   processingStatus: 'idle' | 'processing' | 'paused_missing_key' | 'paused_budget' | 'error' = 'idle';
   processingError: string | null = null;
   constructor(private config: Config, private store: Store, private provider: (signal?: AbortSignal, accountId?: string) => GmailProvider, private interpreter: Interpreter, private imageDownload: typeof downloadWhatsAppImage = downloadWhatsAppImage) {}
-  start() { this.stopped = false; this.started = true; this.schedule(); this.continueQueue(); }
+  start() {
+    this.stopped = false; this.started = true;
+    // Existing completed inboxes adopt the longer interval on deployment,
+    // without losing checkpoints or delaying unfinished initial imports.
+    for (const connection of this.store.gmailConnections()) {
+      if (connection.status !== 'connected' || !connection.lastSyncAt || connection.error || this.store.get('scan', connection.id)) continue;
+      const next = Date.parse(connection.lastSyncAt) + CHECK_INTERVAL;
+      if (Number.isFinite(next) && Date.parse(connection.nextSyncAt) < next) {
+        connection.nextSyncAt = new Date(next).toISOString(); this.store.put('connection', connection.id, connection);
+      }
+    }
+    this.schedule(); this.continueQueue();
+  }
   private continueQueue() {
     if (!this.started || this.stopped || this.active || this.queueTimer) return;
     const continueImport = this.store.gmailConnections().some(c => this.store.get('scan', c.id) && c.status === 'connected' && !c.error);
@@ -46,7 +58,7 @@ export class CalendarWorker {
   private schedule() {
     if (this.timer) clearTimeout(this.timer); if (this.stopped || this.active) return;
     const times = this.store.gmailConnections().filter(c => c.status === 'connected').map(c => Date.parse(c.nextSyncAt));
-    const delay = times.length ? Math.max(100, Math.min(...times) - Date.now()) : HOUR;
+    const delay = times.length ? Math.max(100, Math.min(...times) - Date.now()) : CHECK_INTERVAL;
     this.timer = setTimeout(() => { void this.run(false).finally(() => this.schedule()); }, delay); this.timer.unref();
   }
   kick(force = true): void { void this.run(force).finally(() => this.schedule()); }
@@ -72,7 +84,7 @@ export class CalendarWorker {
         this.store.put('capture_diagnostic', accountId, { phase: this.capturePhase, errorClass: error instanceof ProviderError ? 'ProviderError' : 'Error', status: error instanceof ProviderError ? error.status : null, retryable: error instanceof ProviderError && error.retryable, rateLimitReason: error instanceof ProviderError ? error.rateLimitReason : undefined, at: new Date().toISOString() });
         const fresh = this.store.get<GmailConnection>('connection', accountId) || connection;
         if (error instanceof ProviderError && error.reconnect) fresh.status = 'reconnect_required';
-        fresh.error = safeError(error); fresh.nextSyncAt = new Date(Date.now() + HOUR).toISOString(); this.store.put('connection', accountId, fresh);
+        fresh.error = safeError(error); fresh.nextSyncAt = new Date(Date.now() + CHECK_INTERVAL).toISOString(); this.store.put('connection', accountId, fresh);
       } finally { this.syncing = false; this.syncingAccountId = null; }
     }
     await this.process(signal); this.store.pruneSources();
@@ -132,13 +144,13 @@ export class CalendarWorker {
       if (scan.pageIds.length) break;
       if (!scan.nextPageToken) {
         connection.historyId = scan.mode === 'history' ? scan.finalHistoryId || scan.baseline : scan.baseline;
-        connection.lastSyncAt = new Date().toISOString(); connection.nextSyncAt = new Date(Date.now() + HOUR).toISOString(); connection.error = null;
+        connection.lastSyncAt = new Date().toISOString(); connection.nextSyncAt = new Date(Date.now() + CHECK_INTERVAL).toISOString(); connection.error = null;
         if (connection.warning === 'The scan is still running in saved batches. Check now to continue sooner.' || connection.warning === 'Initial import is in progress. Saved batches continue automatically at a gentle pace.') connection.warning = null;
         this.store.transaction(() => { this.store.put('connection', accountId, connection); this.store.remove('scan', accountId); }); return;
       }
       scan.pageToken = scan.nextPageToken; delete scan.nextPageToken; delete scan.pageIds; this.store.put('scan', accountId, scan); pages++;
     }
-    connection.nextSyncAt = new Date(Date.now() + HOUR).toISOString(); connection.error = null; connection.warning = connection.warning || 'Initial import is in progress. Saved batches continue automatically at a gentle pace.'; this.store.put('connection', accountId, connection);
+    connection.nextSyncAt = new Date(Date.now() + CHECK_INTERVAL).toISOString(); connection.error = null; connection.warning = connection.warning || 'Initial import is in progress. Saved batches continue automatically at a gentle pace.'; this.store.put('connection', accountId, connection);
   }
   private async beginBounded(provider: GmailProvider, mode: 'initial' | 'recovery', email: string): Promise<Scan> {
     this.capturePhase = 'profile';
