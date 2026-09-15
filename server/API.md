@@ -16,6 +16,8 @@ JSON errors are `{ "error": { "code": "revision_conflict", "message": "This even
 
 ## Routes
 
+`POST /v1/events/:id/merge` keeps `:id` and removes `duplicateId`. Body: `{ duplicateId, expectedRevision, duplicateRevision }`. Returns `{ event }`. Both revisions are required; stale/self/missing selections make no changes. The keeper retains its UID, timing, attendance and reminder preference. Only blank location, detail and reference fields are filled from the duplicate. Conflicting values stay in an encrypted audit snapshot; they are not exported. Removed event identities suppress reimport. Pending changes targeting the removed ID remain subject to existing stale-target checks; they are not silently redirected. The current private ICS feed immediately contains only the keeper with an increased sequence; Apple refresh timing is external.
+
 | Method / path | Request | Response |
 | --- | --- | --- |
 | GET `/v1/state` | — | `{ events: Event[], proposals: Proposal[], connection: Connection, gmailAccounts: GmailAccount[] }`; proposals includes pending only |

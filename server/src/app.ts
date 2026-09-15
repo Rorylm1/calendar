@@ -65,6 +65,11 @@ export function buildApp(config: Config, overrides: { store?: Store; google?: Go
   app.post('/v1/events', async (request, reply) => reply.status(201).send({ event: store.createEvent(EventFields.parse(request.body)) }));
   app.patch('/v1/events/:id', async request => { const { id } = z.object({ id: z.string().min(1) }).parse(request.params); const body = z.object({ event: EventPatch, expectedRevision: Revision }).strict().parse(request.body); return { event: store.patchEvent(id, body.event, body.expectedRevision) }; });
   app.delete('/v1/events/:id', async request => { const { id } = z.object({ id: z.string().min(1) }).parse(request.params); const body = z.object({ expectedRevision: Revision }).strict().parse(request.body); store.deleteEvent(id, body.expectedRevision); return { deleted: true }; });
+  app.post('/v1/events/:id/merge', async request => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    const body = z.object({ duplicateId: z.string().min(1), expectedRevision: Revision, duplicateRevision: Revision }).strict().parse(request.body);
+    return { event: store.mergeEvents(id, body.duplicateId, body.expectedRevision, body.duplicateRevision) };
+  });
   app.addHook('onReady', async () => { if (overrides.schedule !== false) { if (config.WHATSAPP_PROCESSING_ENABLED) enqueueWhatsAppBacklog(store); worker.start(); push.start(); } });
   app.addHook('onClose', async () => { await push.stop(); await worker.stop(); if (!overrides.store) store.close(); });
   return { app, store, google, worker, push };

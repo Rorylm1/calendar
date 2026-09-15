@@ -16,7 +16,7 @@ function backendFailureReason(error: unknown) {
 }
 const routeAllowed = (method: string, path: string) =>
   (method === 'GET' && ['state', 'gmail/callback', 'calendar/feed', 'notifications'].includes(path)) ||
-  (method === 'POST' && (/^gmail\/(connect|sync|disconnect|retry-processing)$/.test(path) || ['events', 'calendar/feed/enable', 'calendar/feed/rotate', 'notifications'].includes(path) || /^proposals\/[A-Za-z0-9_-]+\/(confirm|dismiss)$/.test(path))) ||
+  (method === 'POST' && (/^gmail\/(connect|sync|disconnect|retry-processing)$/.test(path) || ['events', 'calendar/feed/enable', 'calendar/feed/rotate', 'notifications'].includes(path) || /^events\/[A-Za-z0-9_-]+\/merge$/.test(path) || /^proposals\/[A-Za-z0-9_-]+\/(confirm|dismiss)$/.test(path))) ||
   (method === 'DELETE' && ['calendar/feed', 'notifications'].includes(path)) ||
   (['PATCH', 'DELETE'].includes(method) && /^events\/[A-Za-z0-9_-]+$/.test(path));
 

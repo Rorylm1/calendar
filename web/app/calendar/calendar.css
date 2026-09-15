@@ -301,10 +301,20 @@
 }
 .personal-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   margin: 22px 0 4px;
 }
+.merge-events { display: flex; flex-direction: column; gap: 12px; }
+.merge-events > label { font-size: 13px; color: var(--soft); }
+.merge-events > select { width: 100%; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; }
+.merge-summary { border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-wrap: anywhere; }
+.merge-summary small { color: var(--soft); font-size: 11px; }
+.merge-summary h3 { margin: 8px 0; font-size: 16px; }
+.merge-summary p { font-size: 13px; line-height: 1.6; margin: 6px 0; }
+.merge-summary .merge-description { white-space: pre-wrap; }
+.merge-events .connection-small { margin: 0; }
 .personal-inline-error {
   padding: 12px 15px;
   border: 1px solid #7b6150;

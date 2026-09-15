@@ -83,7 +83,32 @@ export class Store {
   deleteEvent(id: string, revision: number) {
     this.transaction(() => { this.removeEvent(this.requireEvent(id, revision)); });
   }
-  private removeEvent(event: CalendarEvent) { this.remove('events', event.id); this.put('deleted_events', event.id, { event, baseline: this.get<AutomationMetadata>('event_automation', event.id)?.baseline, revision: event.revision + 1, deletedAt: new Date().toISOString() }); }
+  mergeEvents(keepId: string, duplicateId: string, keepRevision: number, duplicateRevision: number): CalendarEvent {
+    return this.transaction(() => {
+      if (keepId === duplicateId) throw new AppError('invalid_input', 'Choose a different event to merge.');
+      const keep = this.requireEvent(keepId, keepRevision);
+      const duplicate = this.requireEvent(duplicateId, duplicateRevision);
+      const prior = this.get<AutomationMetadata>('event_automation', keepId);
+      const other = this.get<AutomationMetadata>('event_automation', duplicateId);
+      // The owner selects the authoritative event. Fill only blank descriptive
+      // fields; never combine clock/zone pairs or change attendance implicitly.
+      const event: CalendarEvent = { ...keep, location: keep.location || duplicate.location,
+        detail: keep.detail || duplicate.detail, reference: keep.reference || duplicate.reference, revision: keep.revision + 1 };
+      this.saveEvent(event);
+      this.put('event_automation', keepId, {
+        baseline: prior?.baseline || eventFields(keep), managed: prior?.managed || false,
+        ownerFields: [...new Set([...(prior?.ownerFields || []), ...Object.keys(eventFields(event))])],
+        identities: [eventFields(keep), eventFields(duplicate), ...(prior?.identities || []), ...(other?.identities || []), ...(other?.baseline ? [other.baseline] : [])],
+        sourceThreads: [...new Set([...(prior?.sourceThreads || []), ...(other?.sourceThreads || [])])],
+        lastSourceAt: [prior?.lastSourceAt, other?.lastSourceAt].filter((value): value is string => !!value).sort().at(-1),
+      } satisfies AutomationMetadata);
+      this.removeEvent(duplicate);
+      // Retain an encrypted audit snapshot, including any conflicting details.
+      this.put('event_merges', duplicateId, { keepId, before: keep, duplicate, mergedAt: new Date().toISOString() });
+      return event;
+    });
+  }
+  private removeEvent(event: CalendarEvent) { const metadata = this.get<AutomationMetadata>('event_automation', event.id); this.remove('events', event.id); this.put('deleted_events', event.id, { event, baseline: metadata?.baseline, identities: metadata?.identities, revision: event.revision + 1, deletedAt: new Date().toISOString() }); }
   requireEvent(id: string, revision?: number): CalendarEvent {
     const event = this.get<CalendarEvent>('events', id); if (!event) throw new AppError('not_found', 'This event is no longer available.', 404);
     if (revision !== undefined && event.revision !== revision) throw new AppError('revision_conflict', 'This event has changed. Refresh and review it again.', 409); return { ...event, attendance: event.attendance || 'confirmed' };
@@ -189,9 +214,9 @@ export class Store {
     if (proposal.action === 'create') {
       if (!proposal.event.date) return needs('date');
       try { complete(proposal.event); } catch { return needs('dateTime'); }
-      const deleted = this.all<{ event?: CalendarEvent; baseline?: Fields }>('deleted_events');
+      const deleted = this.all<{ event?: CalendarEvent; baseline?: Fields; identities?: Fields[] }>('deleted_events');
       const legacyDeleted = this.all<{ event: CalendarEvent | null }>('confirm_results').filter(result => result.event && this.get('deleted_events', result.event.id));
-      if ([...deleted.flatMap(item => [item.event, item.baseline]), ...legacyDeleted.map(item => item.event)].some(old => old && sameBooking(old, proposal.event, false))) return finish(null, 'suppressed');
+      if ([...deleted.flatMap(item => [item.event, item.baseline, ...(item.identities || [])]), ...legacyDeleted.map(item => item.event)].some(old => old && sameBooking(old, proposal.event, false))) return finish(null, 'suppressed');
       const duplicate = this.events().find(event => { const metadata = this.get<AutomationMetadata>('event_automation', event.id); return [event, metadata?.baseline, ...(metadata?.identities || [])].some(old => old && sameBooking(old, proposal.event)); });
       if (duplicate) {
         const metadata = this.get<AutomationMetadata>('event_automation', duplicate.id);

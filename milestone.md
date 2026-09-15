@@ -240,3 +240,14 @@ Account setup and implementation are now authorized. Purchases still require exp
 - [ ] Complete the second inbox's Google sign-in/consent and verify its first import contributes to the existing calendar.
 
 The existing sign-in identity, private iPhone feed, WhatsApp receiver and monthly model budget remain shared and unchanged.
+
+## Duplicate cleanup — 15 September 2026
+
+- [x] Add an explicit Merge duplicate action in event details, including events outside the displayed month and hidden invitations.
+- [x] Let the owner choose which copy to keep and preview the result; preserve that copy's timing, attendance and reminders, filling only blank descriptive fields.
+- [x] Merge atomically with revision checks, encrypted audit snapshots and suppression of removed identities on later imports.
+- [x] Verify the same private subscription exports one stable event UID with an increased sequence and retained invitation label.
+- [x] Pass 163 backend tests, 54 frontend tests, both typechecks and the production frontend build.
+- [ ] Verify the deployed merge control in the authenticated calendar. Real event merges remain an owner choice; iPhone refresh itself needs device verification.
+
+Live inbox check on 15 September: original Gmail connected, 50 saved events, no failed or pending messages. Second inbox authorization remains at Google's passkey step; no second-inbox import has happened yet.

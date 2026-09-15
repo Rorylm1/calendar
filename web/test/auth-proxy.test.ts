@@ -14,6 +14,18 @@ function fixture(session: OwnerSession = owner, response: unknown = { events: []
   const request = (path = 'state', method = 'GET', headers: Record<string, string> = {}, body?: string) => handle(new Request(`https://calendar.example.test/api/calendar/${path}`, { method, headers, body }), { params: Promise.resolve({ path: path.split('?')[0]!.split('/') }) });
   return { request, calls };
 }
+test('event merge is owner-only, origin-protected and forwards both expected revisions', async () => {
+  const body = JSON.stringify({ duplicateId: 'other', expectedRevision: 2, duplicateRevision: 3 });
+  const headers = { origin: settings.CALENDAR_APP_ORIGIN! };
+  const signedOut = fixture(null);
+  assert.equal((await signedOut.request('events/keep/merge', 'POST', headers, body)).status, 401);
+  const { request, calls } = fixture(owner, { event: { id: 'keep', revision: 3 } });
+  assert.equal((await request('events/keep/merge', 'POST', {}, body)).status, 403);
+  assert.equal(calls.length, 0);
+  assert.equal((await request('events/keep/merge', 'POST', headers, body)).status, 200);
+  assert.equal(calls[0]!.url, 'https://backend.example.test/v1/events/keep/merge');
+  assert.equal(calls[0]!.options?.body, body);
+});
 test('only the configured verified Google account can sign in', () => {
   assert.equal(allowedGoogleProfile('google', { email: 'OWNER@example.test', email_verified: true }, settings.CALENDAR_OWNER_EMAIL), true);
   for (const profile of [{ email: 'owner@example.test', email_verified: false }, { email: 'someone@example.test', email_verified: true }, { email: 'owner@example.test', email_verified: 'true' }]) assert.equal(allowedGoogleProfile('google', profile, settings.CALENDAR_OWNER_EMAIL), false);

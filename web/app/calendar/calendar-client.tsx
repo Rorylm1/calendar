@@ -4,6 +4,7 @@ import { api } from '@/lib/client-api';
 import { createRefreshQueue } from '@/lib/refresh-queue';
 import { stopDeviceNotifications } from '@/lib/push-client';
 import DeliverySettings from './delivery-settings';
+import MergeEvents from './merge-events';
 import { AttendanceBadge, attendanceSummary, effectiveReminder, eventAttendance, eventDisplayTitle, proposalFields, visibleEvents } from './attendance';
 
 import {
@@ -337,6 +338,7 @@ export default function CalendarClient() {
     | 'edit'
     | 'proposal'
     | 'delete'
+    | 'merge'
     | 'disconnect'
     | null
   >(null);
@@ -580,7 +582,7 @@ export default function CalendarClient() {
       ? 'First check pending'
       : 'Connect Gmail';
   const dialogTitle =
-    modal === 'connections'
+    modal === 'merge' ? 'Merge duplicate events' : modal === 'connections'
       ? 'Your connections'
       : modal === 'review'
         ? 'Needs details'
@@ -945,7 +947,7 @@ export default function CalendarClient() {
             <div className="personal-inline-error" role="alert">
               <p>{actionError}</p>
               {actionErrorCode === 'revision_conflict' &&
-                (modal === 'edit' || modal === 'delete' || modal === 'event') && (
+                (modal === 'edit' || modal === 'delete' || modal === 'event' || modal === 'merge') && (
                   <button
                     className="error-recovery"
                     onClick={() => void reloadLatest()}
@@ -1406,7 +1408,22 @@ export default function CalendarClient() {
               <p className="connection-small">
                 Saved from {active.source}. Times remain local to the booking.
               </p>
+              <Button variant="ghost" className="quiet-action" disabled={busy || (data?.events.length || 0) < 2} onClick={() => { setActionError(''); setModal('merge'); }}>
+                Merge duplicate
+              </Button>
             </div>
+          )}
+          {modal === 'merge' && active && data && (
+            <MergeEvents key={`${active.id}:${active.revision}`} active={active} events={data.events} busy={busy} onBack={() => setModal('event')} onMerge={async (keep, duplicate) => {
+              await act(async () => {
+                const result = await api<{ event: CalendarEvent }>(`events/${keep.id}/merge`, 'POST', {
+                  duplicateId: duplicate.id, expectedRevision: keep.revision, duplicateRevision: duplicate.revision,
+                });
+                setActive(result.event);
+                setModal('event');
+                setNotice('Duplicates merged. Your iPhone subscription will update on its next refresh.');
+              });
+            }} />
           )}
           {modal === 'delete' && active && (
             <div className="cancel-review">
