@@ -54,7 +54,7 @@ test('screenshot transcription is saved before extraction retries and uses forwa
     f.store.retryFailures(); await f.worker.process(); assert.equal(reads, 1); assert.equal(downloads, 1); assert.equal(f.store.events()[0]!.attendance, 'confirmed');
   } finally { f.store.close(); }
 });
-test('unreadable images go to Needs details; missing media access does not block text', async () => {
+test('unreadable images are automatically skipped; missing media access does not block text', async () => {
   const f = setup({ ...interpreter(), readImage: async () => ({ text: '', unclear: true, reason: 'Date is cropped' }) }, async () => 'data:image/png;base64,synthetic');
   try { f.capture('cropped', { type: 'image', image: { id: '333', mime_type: 'image/png' } }); await f.worker.process(); assert.equal(f.store.events().length, 0); assert.ok(f.store.proposals()[0]!.unresolvedFields.includes('attachment')); } finally { f.store.close(); }
   const a = setup(interpreter(result()), async () => { throw new WhatsAppMediaError('access'); });
@@ -98,7 +98,7 @@ test('disabling WhatsApp interpretation leaves its queue untouched while Gmail c
 test('an explicit dated reply can resolve one safely matched missing-date invitation', async () => {
   const f = setup(interpreter(output(event, { attendance: 'invited', evidence: ['Dinner tomorrow at Luca'] })));
   try {
-    f.capture('parent', { text: { body: 'Dinner tomorrow at Luca' } }); await f.worker.process(); assert.equal(f.store.proposals()[0]!.status, 'pending');
+    f.capture('parent', { text: { body: 'Dinner tomorrow at Luca' } }); await f.worker.process(); assert.equal(f.store.proposals()[0]!.status, 'skipped');
     f.capture('reply', { context: { id: 'parent' }, text: { body: text } });
     const worker = new CalendarWorker(f.c, f.store, () => { throw Error(); }, interpreter(result())); await worker.process();
     assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.attendance, 'confirmed'); assert.equal(f.store.proposals().filter(p => p.status === 'pending').length, 0);

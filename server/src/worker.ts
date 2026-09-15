@@ -191,8 +191,9 @@ export class CalendarWorker {
         const manualWhatsApp = source.channel === 'whatsapp' && (source.unsupportedAttachments.length > 0 || source.whatsapp?.imageRead && !source.text.trim());
         if (manualWhatsApp) {
           this.store.transaction(() => {
-            this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: source.whatsapp?.imageReason || 'This attachment could not be read. Enter the booking details.' }, attendance: 'confirmed', reason: 'The forwarded image or attachment needs clearer details before an event can be added.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] });
-            this.store.sourceStatus(source.id, 'processed', { decision: 'manual_review', reason: 'Attachment needs details', subject: source.subject });
+            this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: source.whatsapp?.imageReason || 'This attachment could not be read.' }, attendance: 'confirmed', reason: 'The forwarded image or attachment needs clearer details before an event can be added.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] });
+            this.store.autoApplyPending({ proposalIds: this.store.proposals().filter(p => p.status === 'pending' && p.sourceMessageIds.includes(source.id)).map(p => p.id) });
+            this.store.sourceStatus(source.id, 'processed', { decision: 'skipped', reason: 'Attachment needs details', subject: source.subject });
           }); continue;
         }
         const triage = source.channel === 'whatsapp' ? { decision: 'relevant', reason: 'Selected WhatsApp capture' } : await this.interpreter.triage(source, signal); signal?.throwIfAborted();
@@ -200,8 +201,9 @@ export class CalendarWorker {
         if (triage.decision === 'irrelevant') { this.store.sourceStatus(source.id, 'filtered'); continue; }
         if (source.unsupportedAttachments.length && !source.calendar && source.text.length < 160) {
           this.store.transaction(() => {
-            this.store.putProposal({ action: 'create', event: { title: source.subject || 'Review attached booking', kind: 'other', location: '', detail: `The attached file needs manual review: ${source.unsupportedAttachments.join(', ')}. Booking details have not been read.` }, attendance: 'unknown', reason: 'This message relies on an attachment that is not supported yet. Enter its booking details after reviewing the file.', evidence: [source.subject || source.unsupportedAttachments[0]!], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] });
-            this.store.sourceStatus(source.id, 'processed', { decision: 'manual_review', reason: 'Unsupported attachment' });
+            this.store.putProposal({ action: 'create', event: { title: source.subject || 'Review attached booking', kind: 'other', location: '', detail: `The attached file could not be read: ${source.unsupportedAttachments.join(', ')}. Booking details have not been read.` }, attendance: 'unknown', reason: 'This message relies on an attachment that is not supported yet. No event is added without a usable date.', evidence: [source.subject || source.unsupportedAttachments[0]!], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] });
+            this.store.autoApplyPending({ proposalIds: this.store.proposals().filter(p => p.status === 'pending' && p.sourceMessageIds.includes(source.id)).map(p => p.id) });
+            this.store.sourceStatus(source.id, 'processed', { decision: 'skipped', reason: 'Unsupported attachment' });
           }); continue;
         }
         const events = this.store.events(); const output = Extraction.parse(await this.interpreter.extract(source, events, this.store.proposals(), signal)); signal?.throwIfAborted();
@@ -229,7 +231,7 @@ export class CalendarWorker {
         if (signal?.aborted) { this.store.sourceStatus(source.id, 'fetched'); this.processingStatus = 'idle'; this.processingError = null; return; }
         if (error instanceof ProcessingPaused) { this.store.sourceStatus(source.id, 'fetched'); this.processingStatus = error.reason; this.processingError = safeError(error); return; }
         if (error instanceof WhatsAppMediaError && error.reason === 'unsupported') {
-          this.store.transaction(() => { this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: 'Send a clear JPEG or PNG screenshot under 5 MB, or enter the booking details.' }, attendance: 'confirmed', reason: 'This image could not be safely read.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] }); this.store.sourceStatus(source.id, 'processed'); });
+          this.store.transaction(() => { this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: 'The image format or size is unsupported.' }, attendance: 'confirmed', reason: 'This image could not be safely read.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] }); this.store.autoApplyPending({ proposalIds: this.store.proposals().filter(p => p.status === 'pending' && p.sourceMessageIds.includes(source.id)).map(p => p.id) }); this.store.sourceStatus(source.id, 'processed'); });
           continue;
         }
         if (error instanceof WhatsAppMediaError) this.store.put('whatsapp_media_error', 'default', { reason: error.reason, at: new Date().toISOString() });

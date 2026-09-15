@@ -265,3 +265,10 @@ Rory treats every WhatsApp text or screenshot sent to this calendar as accepted 
 ## Unnecessary date/time review — 15 September 2026
 
 The review queue contained 17 dateTime flags caused by model-produced BST/IST abbreviations passing Intl validation but failing the Temporal calendar engine. Validation now uses the calendar engine consistently. Extraction requests location-based zones or explicit offsets; source-supported British and Indian clock conventions are normalized before validation. Unknown zones become explicit ambiguity flags rather than failed mail or a guessed London time. Automatic apply rechecks historical dateTime flags through the same validation, retaining genuine DST conflicts, invalid ranges, other missing facts and duplicate/owner-edit protections. The queue shows readable field labels. Validation: 173 backend tests, typecheck and frontend production build passed; dry-run repairs roll back all event and proposal changes.
+
+
+### 15 September 2026 — no mandatory review
+
+Rory will never manually review candidates. This supersedes earlier Needs details requirements: automatically add usable dated plans, infer clear geographic time zones, omit uncertain optional details and skip undated/conflicting items with an internal reason. Preserve owner edits and conservative update/cancellation matching. Automatic skips do not count as owner dismissals and later clear messages can still add the plan. Gmail invitations retain `INVITATION: `; all deliberately forwarded WhatsApp plans are confirmed.
+
+The actual Gemini decision prompt is editable in [server/src/prompts/calendar.md](server/src/prompts/calendar.md), structured as Background / Behaviour / Output for Rory's input.

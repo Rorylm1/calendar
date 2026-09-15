@@ -36,19 +36,19 @@ test('a legacy BST dateTime flag repairs, passes normal deduplication, and expor
   } finally { store.close(); }
 });
 
-test('DST ambiguity, end-before-start, unknown abbreviations and unrelated missing facts still require details', () => {
-  for (const event of [fields({ date: '2026-10-25', time: '01:30', timeZone: 'Europe/London' }), fields({ time: '20:00', endTime: '19:00', timeZone: 'Europe/London' }), fields({ timeZone: 'IST', location: '' })]) {
+test('DST ambiguity, end-before-start, unrelated missing facts are skipped', () => {
+  for (const event of [fields({ date: '2026-10-25', time: '01:30', timeZone: 'Europe/London' }), fields({ time: '20:00', endTime: '19:00', timeZone: 'Europe/London' })]) {
     const { store } = fixture();
-    try { store.putProposal(proposal({ event, unresolvedFields: ['dateTime'] })); assert.equal(store.autoApplyPending().needsDetails, 1); assert.equal(store.autoApplyPending().needsDetails, 1); assert.equal(store.events().length, 0); } finally { store.close(); }
+    try { store.putProposal(proposal({ event, unresolvedFields: ['dateTime'] })); assert.equal(store.autoApplyPending().skipped, 1); assert.equal(store.autoApplyPending().skipped, 0); assert.equal(store.events().length, 0); } finally { store.close(); }
   }
   const { store } = fixture();
-  try { store.putProposal(proposal({ event: fields({ timeZone: 'BST' }), unresolvedFields: ['dateTime', 'date'] })); assert.equal(store.autoApplyPending().needsDetails, 1); assert.equal(store.events().length, 0); } finally { store.close(); }
+  try { store.putProposal(proposal({ event: fields({ timeZone: 'BST' }), unresolvedFields: ['dateTime', 'date'] })); assert.equal(store.autoApplyPending().skipped, 1); assert.equal(store.events().length, 0); } finally { store.close(); }
 });
 
-test('future model abbreviations normalize before validation; unknown zones become actionable proposals, not failed mail', async () => {
-  for (const [zone, text, expected] of [['BST', 'United Kingdom Time', 1], ['IST', '9:00 PM IST', 0]] as const) {
+test('future model abbreviations normalize before validation; unknown zones become date-only events, not failed mail', async () => {
+  for (const [zone, text, expected] of [['BST', 'United Kingdom Time', 1], ['IST', '9:00 PM IST', 1]] as const) {
     const { config, store } = fixture(); store.capture(source('mail', text));
     const worker = new CalendarWorker(config, store, () => provider(), interpreter(output(fields({ timeZone: zone, location: '' }), { evidence: [text] })));
-    try { await worker.process(); assert.equal(store.events().length, expected); assert.equal(store.counts().failedMessages, 0); if (!expected) assert.ok(store.proposals()[0]!.unresolvedFields.includes('ambiguousTimeZone')); } finally { await worker.stop(); store.close(); }
+    try { await worker.process(); assert.equal(store.events().length, expected); assert.equal(store.counts().failedMessages, 0); if (zone === 'IST') { assert.equal(store.events()[0]!.time, undefined); assert.match(renderCalendarFeed(store).body, /DTSTART;VALUE=DATE:/); } } finally { await worker.stop(); store.close(); }
   }
 });

@@ -29,8 +29,8 @@ export type Proposal = {
   source?: 'Gmail' | 'WhatsApp';
   id: string; action: 'create' | 'update' | 'cancel'; targetEventId?: string; targetRevision?: number;
   event: Fields; attendance: 'confirmed' | 'invited' | 'unknown' | 'declined'; reason: string; evidence: string[];
-  unresolvedFields: string[]; status: 'pending' | 'confirmed' | 'dismissed'; revision: number; sourceMessageIds: string[]; createdAt: string;
-  appliedBy?: 'automatic' | 'owner'; appliedAt?: string; outcome?: 'created' | 'updated' | 'cancelled' | 'duplicate' | 'suppressed';
+  unresolvedFields: string[]; status: 'pending' | 'confirmed' | 'dismissed' | 'skipped'; revision: number; sourceMessageIds: string[]; createdAt: string;
+  appliedBy?: 'automatic' | 'owner'; appliedAt?: string; outcome?: 'created' | 'updated' | 'cancelled' | 'duplicate' | 'suppressed' | 'skipped';
 };
 export type SourceMessage = {
   channel?: 'gmail' | 'whatsapp';

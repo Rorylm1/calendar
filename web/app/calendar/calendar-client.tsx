@@ -612,13 +612,13 @@ export default function CalendarClient() {
             <span className="r2-rail-active" aria-label="Calendar">
               <CalendarDays size={20} />
             </span>
-            <button
+            {proposals.length > 0 && <button
               onClick={() => setModal('review')}
               aria-label={`Needs details, ${proposals.length} ${proposals.length === 1 ? 'item' : 'items'}`}
             >
               <Inbox size={20} />
-              {proposals.length > 0 && <small>{proposals.length}</small>}
-            </button>
+              <small>{proposals.length}</small>
+            </button>}
             <button
               onClick={() => setModal('connections')}
               aria-label="Gmail connection"
@@ -640,7 +640,7 @@ export default function CalendarClient() {
               </a>
               <span className="personal-private">Personal</span>
               <div className="personal-header-actions">
-                <Button
+                {proposals.length > 0 && <Button
                   variant="ghost"
                   className="quiet-action"
                   onClick={() => setModal('review')}
@@ -651,7 +651,7 @@ export default function CalendarClient() {
                   {proposals.length > 0 && (
                     <b className="personal-count">{proposals.length}</b>
                   )}
-                </Button>
+                </Button>}
                 <Button
                   variant="ghost"
                   className="quiet-action personal-connections"
@@ -1006,8 +1006,8 @@ export default function CalendarClient() {
               <p className="connection-explainer">
                 Read-only access to find personal plans and dated bookings. Clear
                 bookings and invitations are added automatically. Invitations
-                start with “INVITATION: ”. Missing or conflicting
-                details appear in Needs details.
+                start with “INVITATION: ”. Optional details are left blank when unclear.
+                Undated or conflicting items are skipped automatically; no review is needed.
               </p>
               <p className="connection-explainer">
                 Relevant email text is interpreted by Gemini through OpenRouter.{' '}
@@ -1162,7 +1162,7 @@ export default function CalendarClient() {
               </p>
               {data?.whatsapp?.configured && <section aria-label="WhatsApp connection" className="whatsapp-connection">
                 <div className="connection-heading"><span className="connection-icon"><MessageCircle size={25} strokeWidth={1.4} /></span><div><h3>WhatsApp</h3><p>Forward a plan. Leave the details to your calendar.</p></div><span className="connection-state">{data.whatsapp.processingEnabled ? 'Connected' : 'Capture only'}</span></div>
-                <p className="connection-explainer">{data.whatsapp.processingEnabled ? 'Text messages and clear screenshots become confirmed plans automatically. Dates without a year use their next occurrence. Unclear details stay in Needs details.' : 'Messages are being saved. Automatic calendar entry is not enabled yet.'}</p>
+                <p className="connection-explainer">{data.whatsapp.processingEnabled ? 'Text messages and clear screenshots become confirmed plans automatically. Dates without a year use their next occurrence. Optional details can stay blank. Messages without a usable date are skipped automatically.' : 'Messages are being saved. Automatic calendar entry is not enabled yet.'}</p>
                 {data.whatsapp.contactNumber && <a className="error-recovery" href={`https://wa.me/${data.whatsapp.contactNumber}`} target="_blank" rel="noreferrer">Open your calendar in WhatsApp <ArrowUpRight size={14} /></a>}
                 <dl className="connection-facts"><div><dt>Last received</dt><dd>{clockLabel(data.whatsapp.lastReceivedAt)}</dd></div><div><dt>Messages received</dt><dd>{data.whatsapp.capturedMessages}</dd></div><div><dt>Screenshots</dt><dd>{data.whatsapp.screenshotsConfigured && !data.whatsapp.mediaError ? 'Ready' : 'Connection needed'}</dd></div></dl>
                 {(!data.whatsapp.screenshotsConfigured || data.whatsapp.mediaError) && <p className="personal-inline-error">Screenshot downloads need attention. Your text messages still work; unread images are saved for retry.</p>}
@@ -1243,7 +1243,7 @@ export default function CalendarClient() {
                     {!connection
                       ? error ? 'Try loading your calendar again to see what needs attention.' : 'Items needing your help will appear here.'
                       : connected
-                      ? 'Bookings and invitations appear automatically in your calendar. Only missing or conflicting details need your help.'
+                      ? 'Bookings and invitations appear automatically in your calendar. No manual review is needed.'
                       : 'Connect Gmail to bring bookings and invitations into your calendar.'}
                   </p>
                   {data && !connected && (

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { fields, fixture, proposal, source } from './helpers.ts';
 import type { Proposal } from '../src/domain.ts';
 import type { Store } from '../src/store.ts';
+import { renderCalendarFeed } from '../src/calendar-feed.ts';
 
 function add(store: Store, patch: Partial<Parameters<typeof proposal>[0]> = {}) {
   const item = store.putProposal(proposal(patch))!;
@@ -12,6 +13,42 @@ function apply(store: Store, patch: Parameters<typeof proposal>[0] = {}) {
   const item = add(store, patch); const counts = store.autoApplyPending({ proposalIds: [item.id] });
   return { item: store.get<Proposal>('proposals', item.id)!, counts, event: store.events()[0]! };
 }
+
+test('a known NYC city resolves a missing zone and keeps a broad location in the iPhone feed', () => {
+  const { store } = fixture();
+  store.capture(source('nyc', 'NYC Founders Poker Night, September 23 at 7pm. Venue in NYC.'));
+  const result = apply(store, { sourceMessageIds: ['nyc'], evidence: ['NYC Founders Poker Night'], attendance: 'invited', event: fields({ title: 'NYC Founders Poker Night', date: '2026-09-23', time: '19:00', endTime: '23:00', location: 'NYC' }), unresolvedFields: ['timeZone', 'location'] });
+  assert.equal(result.counts.created, 1); assert.equal(result.event.location, 'NYC');
+  assert.equal(result.event.timeZone, 'America/New_York');
+  assert.match(renderCalendarFeed(store).body, /DTSTART:20260923T230000Z/);
+  assert.equal(store.proposals().filter(p => p.status === 'pending').length, 0); store.close();
+});
+
+test('uncertain time and end are omitted, and skipped dates do not suppress a later clear plan', () => {
+  const { store } = fixture();
+  const partial = apply(store, { event: fields({ title: 'Dated party', endTime: '23:00' }), unresolvedFields: ['time', 'endTime'] });
+  assert.equal(partial.counts.created, 1); assert.equal(partial.event.time, undefined); assert.equal(partial.event.endTime, undefined);
+  assert.match(renderCalendarFeed(store).body, /DTSTART;VALUE=DATE:20260908/);
+  const unknown = apply(store, { event: fields({ title: 'Dinner without date', date: undefined }), unresolvedFields: ['date'] });
+  assert.equal(unknown.item.status, 'skipped'); assert.equal(unknown.item.appliedBy, 'automatic');
+  assert.deepEqual(unknown.item.evidence, proposal().evidence);
+  assert.equal(apply(store, { event: fields({ title: 'Dinner without date' }) }).counts.created, 1);
+  assert.equal(store.proposals().filter(p => p.status === 'pending').length, 0); store.close();
+});
+
+test('skipped fingerprints retry with new evidence but exact source replays remain idempotent', () => {
+  const { store } = fixture(); const input = proposal({ event: fields({ date: undefined }), unresolvedFields: ['date'] });
+  const result = apply(store, input); assert.equal(result.item.status, 'skipped');
+  assert.equal(store.putProposal(input), undefined);
+  // Undated fingerprints intentionally include source identity. A dated but
+  // unmatched update exercises the exact same fingerprint/new-source path.
+  const update = proposal({ action: 'update', targetEventId: 'missing', targetRevision: 1 });
+  const skipped = apply(store, update);
+  const retry = store.putProposal({ ...update, sourceMessageIds: ['new-source'] })!;
+  assert.equal(retry.id, skipped.item.id); assert.equal(retry.status, 'pending');
+  assert.deepEqual(retry.sourceMessageIds, ['m1', 'new-source']);
+  store.autoApplyPending(); assert.equal(store.proposals().filter(p => p.status === 'pending').length, 0); store.close();
+});
 
 test('dated bookings are confirmed, invitations and uncertain attendance are invited, and source evidence survives', () => {
   const { store } = fixture();
@@ -29,35 +66,36 @@ test('dated bookings are confirmed, invitations and uncertain attendance are inv
 test('preview rolls back every record, then applying existing pending is idempotent and requires no source payload', () => {
   const { store } = fixture(); const first = add(store); const second = add(store, { attendance: 'invited' });
   const before = store.db.prepare('SELECT * FROM records ORDER BY bucket,id').all();
-  assert.deepEqual(store.autoApplyPending({ dryRun: true }), { created: 1, updated: 0, cancelled: 0, duplicate: 1, suppressed: 0, needsDetails: 0 });
+  assert.deepEqual(store.autoApplyPending({ dryRun: true }), { created: 1, updated: 0, cancelled: 0, duplicate: 1, suppressed: 0, skipped: 0 });
   assert.deepEqual(store.db.prepare('SELECT * FROM records ORDER BY bucket,id').all(), before); assert.equal(store.events().length, 0);
   assert.equal(store.autoApplyPending().created, 1); assert.equal(store.events().length, 1);
   assert.equal(store.get<Proposal>('proposals', first.id)!.outcome, 'created'); assert.equal(store.get<Proposal>('proposals', second.id)!.outcome, 'duplicate');
-  assert.deepEqual(store.autoApplyPending(), { created: 0, updated: 0, cancelled: 0, duplicate: 0, suppressed: 0, needsDetails: 0 }); store.close();
+  assert.deepEqual(store.autoApplyPending(), { created: 0, updated: 0, cancelled: 0, duplicate: 0, suppressed: 0, skipped: 0 }); store.close();
 });
 
-test('date-only invitations are valid; absent dates, hard ambiguity, attachments and missing evidence remain exceptions', () => {
+test('date-only invitations are valid; absent dates, hard ambiguity, attachments and missing evidence are skipped without a review queue', () => {
   const { store } = fixture();
   assert.equal(apply(store, { attendance: 'invited', event: fields({ time: undefined }), unresolvedFields: ['time', 'attendance'] }).counts.created, 1);
   for (const patch of [
-    { event: fields({ date: undefined }) }, { unresolvedFields: ['attachment'] }, { unresolvedFields: ['time'] },
+    { event: fields({ date: undefined }) }, { unresolvedFields: ['attachment'] },
     { unresolvedFields: ['date is either Tuesday or Thursday'] }, { evidence: [] },
     { event: fields({ date: '2026-10-25', time: '01:30' }) },
-  ]) assert.equal(apply(store, patch).counts.needsDetails, 1);
+  ]) assert.equal(apply(store, patch).counts.skipped, 1);
   assert.equal(store.events().length, 1); store.close();
 });
 
-test('absent optional location, reference and checkout date do not block a dated plan, while conflicting supplied values do', () => {
+test('uncertain optional details are omitted instead of blocking a dated plan', () => {
   const { store } = fixture();
   assert.equal(apply(store, { event: fields({ location: '', reference: undefined, endDate: undefined }), unresolvedFields: ['location', 'reference', 'endDate'] }).counts.created, 1);
-  assert.equal(apply(store, { event: fields({ title: 'Conflicting location' }), unresolvedFields: ['location'] }).counts.needsDetails, 1); store.close();
+  const uncertain = apply(store, { event: fields({ title: 'Conflicting location' }), unresolvedFields: ['location'] });
+  assert.equal(uncertain.counts.created, 1); assert.equal(store.events().find(e => e.title === 'Conflicting location')!.location, ''); store.close();
 });
 
 test('similar bookings at distinct venues or in distinct zones are not duplicates; cancellation cannot target the competing event', () => {
   const { store } = fixture(); const first = apply(store, { event: fields({ location: 'Place A', time: '18:00' }) }).event;
   const second = apply(store, { event: fields({ location: 'Place B', time: '20:00' }) }); assert.equal(second.counts.created, 1);
   assert.equal(apply(store, { event: fields({ location: 'Place C', time: '18:00' }) }).counts.created, 1);
-  assert.equal(apply(store, { action: 'cancel', targetEventId: first.id, targetRevision: 1, event: fields({ location: 'Place B', time: '20:00' }) }).counts.needsDetails, 1);
+  assert.equal(apply(store, { action: 'cancel', targetEventId: first.id, targetRevision: 1, event: fields({ location: 'Place B', time: '20:00' }) }).counts.skipped, 1);
   assert.equal(store.events().length, 3);
   assert.equal(apply(store, { event: fields({ title: 'Remote session', timeZone: 'Europe/London' }) }).counts.created, 1);
   assert.equal(apply(store, { event: fields({ title: 'Remote session', timeZone: 'Europe/Paris' }) }).counts.created, 1); store.close();
@@ -98,7 +136,7 @@ test('explicit owner attendance overrides survive automatic acceptance while man
   assert.equal(accepted.counts.updated, 1); assert.equal(accepted.event.time, '20:00'); assert.equal(accepted.event.attendance, 'invited');
   assert.equal(accepted.event.detail, 'Bring umbrella'); assert.equal(accepted.event.location, ''); assert.equal(accepted.event.reminderMinutes, null);
   const conflict = apply(store, { action: 'update', targetEventId: edited.id, targetRevision: accepted.event.revision, event: fields({ location: 'A different restaurant', reference: 'BOOK-1' }) });
-  assert.equal(conflict.counts.needsDetails, 1); assert.ok(conflict.item.unresolvedFields.includes('ownerEdited:location')); store.close();
+  assert.equal(conflict.counts.skipped, 1); assert.ok(conflict.item.unresolvedFields.includes('ownerEdited:location')); store.close();
 });
 
 test('duplicate old booking details cannot undo a manual time change or create a second entry', () => {
@@ -120,20 +158,20 @@ test('dismissed, explicitly declined and owner-deleted plans are never resurrect
 
 test('automatic cancellations require a matching current target and preserve cancellation evidence attendance', () => {
   const { store } = fixture(); const original = apply(store).event;
-  const unmatched = apply(store, { action: 'cancel', targetEventId: 'unknown', targetRevision: 1 }); assert.equal(unmatched.counts.needsDetails, 1);
-  const wrong = apply(store, { action: 'cancel', targetEventId: original.id, targetRevision: 1, event: fields({ title: 'Different appointment' }) }); assert.equal(wrong.counts.needsDetails, 1);
+  const unmatched = apply(store, { action: 'cancel', targetEventId: 'unknown', targetRevision: 1 }); assert.equal(unmatched.counts.skipped, 1);
+  const wrong = apply(store, { action: 'cancel', targetEventId: original.id, targetRevision: 1, event: fields({ title: 'Different appointment' }) }); assert.equal(wrong.counts.skipped, 1);
   const cancelled = apply(store, { action: 'cancel', targetEventId: original.id, targetRevision: 1, attendance: 'unknown' });
   assert.equal(cancelled.counts.cancelled, 1); assert.equal(cancelled.item.attendance, 'unknown'); assert.equal(store.events().length, 0);
   assert.equal(apply(store, { event: fields({ detail: 'Old reminder' }) }).counts.suppressed, 1); store.close();
 });
 
-test('stale proposals and legacy or manual events retain owner resolution guards', () => {
+test('stale proposals and legacy or manual events are skipped without changing saved events', () => {
   const { store } = fixture(); const event = apply(store).event; store.patchEvent(event.id, { time: '22:00' }, 1);
-  assert.equal(apply(store, { action: 'update', targetEventId: event.id, targetRevision: 1, event: fields({ time: '20:00' }) }).counts.needsDetails, 1);
+  assert.equal(apply(store, { action: 'update', targetEventId: event.id, targetRevision: 1, event: fields({ time: '20:00' }) }).counts.skipped, 1);
   const manual = store.createEvent(fields({ title: 'Manual booking' }));
-  assert.equal(apply(store, { action: 'cancel', targetEventId: manual.id, targetRevision: 1, event: fields({ title: manual.title }) }).counts.needsDetails, 1);
+  assert.equal(apply(store, { action: 'cancel', targetEventId: manual.id, targetRevision: 1, event: fields({ title: manual.title }) }).counts.skipped, 1);
   store.remove('event_automation', event.id);
-  assert.equal(apply(store, { action: 'cancel', targetEventId: event.id, targetRevision: 2 }).counts.needsDetails, 1); store.close();
+  assert.equal(apply(store, { action: 'cancel', targetEventId: event.id, targetRevision: 2 }).counts.skipped, 1); store.close();
 });
 
 test('older-source updates and cancellations cannot undo a newer change; original dated identities still deduplicate', () => {

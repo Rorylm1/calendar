@@ -7,11 +7,12 @@ import { AppError, ProcessingPaused } from './errors.ts';
 import { confirmedFields, mergeFields, type GmailConnection, type CalendarEvent, type Fields, type Proposal, type SourceMessage, type EventPatch } from './domain.ts';
 import type { z } from 'zod';
 import { normalizeSourceTimeZones } from './time-zones.ts';
+import { resolveOptionalDetails } from './automatic-policy.ts';
 
 export type SourceStatus = 'fetched' | 'processing' | 'processed' | 'filtered' | 'failed';
 export type EventExportMetadata = { revision: number; createdAt: string; modifiedAt: string };
 type AutomationMetadata = { baseline: Fields; ownerFields: string[]; managed: boolean; identities?: Fields[]; lastSourceAt?: string; sourceThreads?: string[] };
-export type AutoApplySummary = { created: number; updated: number; cancelled: number; duplicate: number; suppressed: number; needsDetails: number };
+export type AutoApplySummary = { created: number; updated: number; cancelled: number; duplicate: number; suppressed: number; skipped: number };
 const eventFields = ({ id: _id, source: _source, revision: _revision, ...fields }: CalendarEvent): Fields => fields;
 const normalized = (value?: string) => (value || '').replace(/^\s*(?:invitation\s*:\s*)+/i, '').trim().replace(/\s+/g, ' ').toLowerCase();
 function sameBooking(a: Fields, b: Fields, compareTime = true): boolean {
@@ -120,7 +121,14 @@ export class Store {
     if (known) {
       const proposal = this.get<Proposal>('proposals', known.proposal_id);
       if (proposal) {
+        const hasNewSource = input.sourceMessageIds.some(id => !proposal.sourceMessageIds.includes(id));
         proposal.sourceMessageIds = [...new Set([...proposal.sourceMessageIds, ...input.sourceMessageIds])]; this.put('proposals', proposal.id, proposal);
+        // An automatic skip is not an owner dismissal. New evidence can make
+        // an otherwise identical update safe (for example, newer chronology).
+        if (proposal.status === 'skipped' && hasNewSource) {
+          const retry: Proposal = { ...proposal, ...input, sourceMessageIds: proposal.sourceMessageIds, status: 'pending', revision: proposal.revision + 1, outcome: undefined, appliedAt: undefined, appliedBy: undefined };
+          this.put('proposals', retry.id, retry); this.remove('confirm_results', retry.id); return retry;
+        }
         const applied = this.get<{ event: CalendarEvent | null }>('confirm_results', proposal.id)?.event;
         const current = applied && this.get<CalendarEvent>('events', applied.id); const metadata = current && this.get<AutomationMetadata>('event_automation', current.id);
         if (proposal.status === 'confirmed' && current && metadata?.managed && compatibleIdentity(current, input.event)) { this.recordSources(metadata, input.sourceMessageIds); this.put('event_automation', current.id, metadata); }
@@ -134,7 +142,7 @@ export class Store {
     return this.transaction(() => {
       const proposal = this.get<Proposal>('proposals', id); if (!proposal) throw new AppError('not_found', 'This suggestion is no longer available.', 404);
       if (proposal.status === 'confirmed') return this.get<{ proposal: Proposal; event: CalendarEvent | null }>('confirm_results', id)!;
-      if (proposal.status !== 'pending') throw new AppError('review_conflict', 'This suggestion was dismissed.', 409);
+      if (proposal.status !== 'pending') throw new AppError('review_conflict', 'This suggestion has already been skipped or dismissed.', 409);
       let event: CalendarEvent | null = null;
       if (proposal.action === 'create') { event = this.createEvent(mergeFields({ ...proposal.event, attendance: proposal.attendance === 'confirmed' ? 'confirmed' : 'invited' }, patch), proposal.source || 'Gmail'); }
       else {
@@ -153,7 +161,7 @@ export class Store {
     });
   }
   private finishProposal(proposal: Proposal, event: CalendarEvent | null, appliedBy: 'automatic' | 'owner', outcome: NonNullable<Proposal['outcome']>) {
-    proposal.status = outcome === 'suppressed' ? 'dismissed' : 'confirmed'; proposal.revision += 1;
+    proposal.status = outcome === 'suppressed' ? 'dismissed' : outcome === 'skipped' ? 'skipped' : 'confirmed'; proposal.revision += 1;
     proposal.appliedBy = appliedBy; proposal.appliedAt = new Date().toISOString(); proposal.outcome = outcome;
     this.put('proposals', proposal.id, proposal); const result = { proposal, event }; this.put('confirm_results', proposal.id, result); return result;
   }
@@ -174,7 +182,7 @@ export class Store {
    * cross-proposal deduplication, and return counts without any private content. */
   autoApplyPending(options: { dryRun?: boolean; proposalIds?: string[] } = {}): AutoApplySummary {
     const run = () => {
-      const counts: AutoApplySummary = { created: 0, updated: 0, cancelled: 0, duplicate: 0, suppressed: 0, needsDetails: 0 };
+      const counts: AutoApplySummary = { created: 0, updated: 0, cancelled: 0, duplicate: 0, suppressed: 0, skipped: 0 };
       const selected = options.proposalIds ? new Set(options.proposalIds) : undefined;
       for (const proposal of this.proposals().filter(item => item.status === 'pending' && (!selected || selected.has(item.id))).sort((a, b) => a.createdAt.localeCompare(b.createdAt))) counts[this.applyAutomatically(proposal)]++;
       return counts;
@@ -187,28 +195,30 @@ export class Store {
     return this.db.isTransaction ? write() : this.transaction(write);
   }
   private applyAutomatically(proposal: Proposal): keyof AutoApplySummary {
-    const context = [proposal.event.title, proposal.event.location, ...proposal.evidence, ...proposal.sourceMessageIds.flatMap(id => { const source = this.source(id); return source ? [source.text, ...source.context.map(item => item.text)] : []; })].join('\n');
+    const context = [...proposal.evidence, ...proposal.sourceMessageIds.flatMap(id => { const source = this.source(id); return source ? [source.text, ...source.context.map(item => item.text)] : []; })].join('\n');
     const zones = normalizeSourceTimeZones(proposal.event, context);
-    let flags = [...new Set([...proposal.unresolvedFields, ...zones.unresolved])];
+    const decision = resolveOptionalDetails(zones.event, [...new Set([...proposal.unresolvedFields, ...zones.unresolved])], context);
+    zones.event = decision.event;
+    let flags = decision.unresolved;
     // Re-evaluate a historical validation flag after normalizing the source
     // zone. A real invalid date, end-before-start or DST conflict stays blocked.
-    if (!zones.unresolved.length && flags.includes('dateTime')) {
+    if (flags.includes('dateTime')) {
       try { confirmedFields({ ...zones.event, ...(zones.event.time || zones.event.endTime ? { timeZone: zones.event.timeZone || 'Europe/London' } : {}) }); flags = flags.filter(field => field !== 'dateTime'); } catch { /* still needs details */ }
     }
     if (!sameValue(zones.event, proposal.event) || !sameValue(flags, proposal.unresolvedFields)) {
       proposal.event = zones.event; proposal.unresolvedFields = flags; proposal.revision++; this.put('proposals', proposal.id, proposal);
     }
-    const needs = (field?: string): 'needsDetails' => {
+    const skip = (field?: string): 'skipped' => {
       if (field && !proposal.unresolvedFields.includes(field)) { proposal.unresolvedFields.push(field); proposal.revision++; this.put('proposals', proposal.id, proposal); }
-      return 'needsDetails';
+      this.finishProposal(proposal, null, 'automatic', 'skipped');
+      return 'skipped';
     };
     const finish = (event: CalendarEvent | null, outcome: NonNullable<Proposal['outcome']>): keyof AutoApplySummary => { this.finishProposal(proposal, event, 'automatic', outcome); return outcome; };
-    if (!proposal.evidence.some(excerpt => excerpt.trim().length > 2) || !proposal.sourceMessageIds.length) return needs('evidence');
+    if (!proposal.evidence.some(excerpt => excerpt.trim().length > 2) || !proposal.sourceMessageIds.length) return skip('evidence');
     if (proposal.action === 'create' && proposal.attendance === 'declined') return finish(null, 'suppressed');
-    // Attendance and absent optional clock/zone values are representable. Factual
-    // ambiguity, unsupported attachments and missing targets require owner input.
-    const optional: Record<string, keyof Fields | null> = { attendance: null, rsvp: null, confirmation: null, time: 'time', starttime: 'time', endtime: 'endTime', timezone: 'timeZone', endtimezone: 'endTimeZone', location: 'location', reference: 'reference', enddate: 'endDate' };
-    if (proposal.unresolvedFields.some(field => { const key = field.replace(/[ _-]/g, '').toLowerCase(); return !Object.hasOwn(optional, key) || optional[key] !== null && proposal.event[optional[key]!] !== undefined && proposal.event[optional[key]!] !== ''; })) return needs();
+    // Optional ambiguity has been removed. Essential uncertainty is recorded
+    // as an automatic skip, never a task for the owner.
+    if (proposal.unresolvedFields.length) return skip();
     const attendance: 'confirmed' | 'invited' = proposal.attendance === 'confirmed' ? 'confirmed' : 'invited';
     const { sourceAt, sourceThreads } = this.sourceProvenance(proposal.sourceMessageIds);
     const recordSource = (metadata: AutomationMetadata) => this.recordSources(metadata, proposal.sourceMessageIds);
@@ -224,8 +234,8 @@ export class Store {
     ));
     if (suppressed) return finish(null, 'suppressed');
     if (proposal.action === 'create') {
-      if (!proposal.event.date) return needs('date');
-      try { complete(proposal.event); } catch { return needs('dateTime'); }
+      if (!proposal.event.date) return skip('date');
+      try { complete(proposal.event); } catch { return skip('dateTime'); }
       const deleted = this.all<{ event?: CalendarEvent; baseline?: Fields; identities?: Fields[] }>('deleted_events');
       const legacyDeleted = this.all<{ event: CalendarEvent | null }>('confirm_results').filter(result => result.event && this.get('deleted_events', result.event.id));
       if ([...deleted.flatMap(item => [item.event, item.baseline, ...(item.identities || [])]), ...legacyDeleted.map(item => item.event)].some(old => old && sameBooking(old, proposal.event, false))) return finish(null, 'suppressed');
@@ -242,33 +252,33 @@ export class Store {
       const metadata: AutomationMetadata = { baseline: eventFields(event), ownerFields: [], managed: true, identities: [eventFields(event)] }; recordSource(metadata); this.put('event_automation', event.id, metadata);
       return finish(event, 'created');
     }
-    if (!proposal.targetEventId || proposal.targetRevision === undefined) return needs('targetEventId');
+    if (!proposal.targetEventId || proposal.targetRevision === undefined) return skip('targetEventId');
     let old: CalendarEvent;
-    try { old = this.requireEvent(proposal.targetEventId, proposal.targetRevision); } catch { return needs('targetRevision'); }
+    try { old = this.requireEvent(proposal.targetEventId, proposal.targetRevision); } catch { return skip('targetRevision'); }
     const metadata = this.get<AutomationMetadata>('event_automation', old.id);
-    // Legacy/manual events have no reliable per-field provenance. Leave changes
-    // to those plans for explicit resolution instead of guessing ownership.
-    if (!metadata?.managed) return needs('ownerEditedEvent');
+    // Legacy/manual events have no reliable per-field provenance. Skip changes
+    // to those plans rather than overwrite the owner's choices.
+    if (!metadata?.managed) return skip('ownerEditedEvent');
     const referenceMatch = old.reference && proposal.event.reference && normalized(old.reference) === normalized(proposal.event.reference);
     const referenceConflict = old.reference && proposal.event.reference && normalized(old.reference) !== normalized(proposal.event.reference);
     const identityMatch = normalized(old.title) === normalized(proposal.event.title) && (old.date === proposal.event.date || sourceThreads.some(thread => metadata.sourceThreads?.includes(thread)));
-    if (referenceConflict || !referenceMatch && !identityMatch) return needs('targetIdentity');
-    if (metadata.lastSourceAt && (!sourceAt || sourceAt < metadata.lastSourceAt)) return sourceAt ? finish(old, 'duplicate') : needs('sourceChronology');
+    if (referenceConflict || !referenceMatch && !identityMatch) return skip('targetIdentity');
+    if (metadata.lastSourceAt && (!sourceAt || sourceAt < metadata.lastSourceAt)) return sourceAt ? finish(old, 'duplicate') : skip('sourceChronology');
     const competing = this.events().filter(event => event.id !== old.id && compatibleIdentity(event, proposal.event));
-    if (competing.length || proposal.action === 'cancel' && !compatibleIdentity(old, proposal.event)) return needs('targetIdentity');
-    if (referenceMatch && normalized(old.title) !== normalized(proposal.event.title) && this.events().some(event => event.id !== old.id && event.reference && normalized(event.reference) === normalized(old.reference))) return needs('targetIdentity');
+    if (competing.length || proposal.action === 'cancel' && !compatibleIdentity(old, proposal.event)) return skip('targetIdentity');
+    if (referenceMatch && normalized(old.title) !== normalized(proposal.event.title) && this.events().some(event => event.id !== old.id && event.reference && normalized(event.reference) === normalized(old.reference))) return skip('targetIdentity');
     if (proposal.action === 'cancel') {
-      if (metadata.ownerFields.length) return needs('ownerEditedEvent');
+      if (metadata.ownerFields.length) return skip('ownerEditedEvent');
       this.removeEvent(old); return finish(null, 'cancelled');
     }
     const before = eventFields(old); let next = suppliedFields(before, proposal.event);
     next.attendance = before.attendance === 'confirmed' || attendance === 'confirmed' ? 'confirmed' : 'invited';
     for (const key of metadata.ownerFields) {
       const field = key as keyof Fields;
-      if (key !== 'attendance' && key !== 'reminderMinutes' && !sameValue(next[field], before[field]) && !sameValue(next[field], metadata.baseline[field])) return needs(`ownerEdited:${key}`);
+      if (key !== 'attendance' && key !== 'reminderMinutes' && !sameValue(next[field], before[field]) && !sameValue(next[field], metadata.baseline[field])) return skip(`ownerEdited:${key}`);
       if (before[field] === undefined) delete next[field]; else (next as Record<string, unknown>)[key] = before[field];
     }
-    try { next = complete(next); } catch { return needs('dateTime'); }
+    try { next = complete(next); } catch { return skip('dateTime'); }
     if (sameValue(next, before)) { recordSource(metadata); this.put('event_automation', old.id, metadata); return finish(old, 'duplicate'); }
     const event: CalendarEvent = { ...next, date: next.date!, id: old.id, source: old.source, revision: old.revision + 1 };
     this.saveEvent(event); metadata.identities = [...(metadata.identities || [metadata.baseline]), eventFields(event)]; metadata.baseline = { ...suppliedFields(metadata.baseline, proposal.event), attendance }; recordSource(metadata); this.put('event_automation', event.id, metadata);
@@ -277,7 +287,7 @@ export class Store {
   resolveWhatsAppReply(source: SourceMessage, proposalIds: string[]) {
     if (source.channel !== 'whatsapp' || source.whatsapp?.forwarded || !source.context.length) return;
     const parent = source.context.at(-1)!.id;
-    const older = this.proposals().filter(p => p.status === 'pending' && p.action === 'create' && p.sourceMessageIds.includes(parent));
+    const older = this.proposals().filter(p => ['pending', 'skipped'].includes(p.status) && p.action === 'create' && p.sourceMessageIds.includes(parent));
     const applied = proposalIds.map(id => this.get<{ proposal: Proposal; event: CalendarEvent | null }>('confirm_results', id)).filter(result => result?.event && result.proposal.action === 'create');
     if (older.length !== 1 || applied.length !== 1) return;
     const previous = older[0]!; const result = applied[0]!;
