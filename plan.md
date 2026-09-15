@@ -54,7 +54,7 @@ This is the intended flow after the official receiving spike proves a usable rou
 4. Use **Needs details** only when the forwarded content leaves factual ambiguity, a missing date or an unsafe match. Attendance can be changed in the calendar; this sends no RSVP.
 5. Forward later changes too. Safely matched changes can apply automatically; the app cannot discover changes in a conversation it has not received. No outgoing WhatsApp acknowledgement or reply is required for this flow.
 
-Forwarding means **“please look at this”**, not **“I am attending.”** An optional extra message such as “I'm going” or “just considering this” can clarify intent. Follow-ups must be associated with the right suggestion; if that association is unclear, request the missing context in Needs details.
+Forwarding a WhatsApp text or screenshot means **“I am attending.”** Its plans default to confirmed. A day and month without a year use the next occurrence from the forwarding date in London time (this year, or next year if already passed). Explicit years remain as written. Follow-ups must be associated with the right suggestion; if that association is unclear, request the missing context in Needs details.
 
 ### Integration approach
 
@@ -72,7 +72,7 @@ Forwarding means **“please look at this”**, not **“I am attending.”** An
 
 ### Context limitations
 
-Do not assume a forward supplies the original sender, original message timestamp, full conversation, or proof of agreement. WhatsApp's documented forwarding context is limited. Preserve the content actually received and label it as forwarded by Rory. [Meta webhook context reference](https://www.postman.com/meta/whatsapp-business-platform/folder/hysdhqs/context-object)
+Do not assume a forward supplies the original sender, original message timestamp, full conversation, or proof of agreement from other people. The owner has explicitly chosen to treat forwarding as their own acceptance. WhatsApp's documented forwarding context is limited. Preserve the content actually received and label it as forwarded by Rory. [Meta webhook context reference](https://www.postman.com/meta/whatsapp-business-platform/folder/hysdhqs/context-object)
 
 In particular, “tomorrow at seven” in a forwarded message needs clarification unless the original date or other reliable context is present. The time the forward arrived is not necessarily the time the original message was written. A date of “Friday” may likewise need confirmation.
 
@@ -252,7 +252,7 @@ Current decisions, 8 September 2026: the prize remains reduced manual entry, Wha
 
 ## WhatsApp quick-forward contract — 9 September 2026
 
-Rory will quickly forward text or screenshots containing an event name and date. Those two readable, unambiguous facts are sufficient to add an event automatically. Preserve any visible location in the calendar location field and any supplied event description in its notes, including in the same private iPhone subscription. Time, description and location are optional; leave missing values blank. Collapsed descriptions or “Read more” must not block otherwise usable event facts. Preserve readable fields even when another required fact needs clarification. Keep the existing INVITATION: attendance rule; forwarding alone is not acceptance.
+Rory will quickly forward text or screenshots containing an event name and date. Those two readable, unambiguous facts are sufficient to add an event automatically. Preserve any visible location in the calendar location field and any supplied event description in its notes, including in the same private iPhone subscription. Time, description and location are optional; leave missing values blank. Collapsed descriptions or “Read more” must not block otherwise usable event facts. Preserve readable fields even when another required fact needs clarification. WhatsApp forwarding means accepted attendance, so its plans have no INVITATION: prefix. Gmail invitations retain their existing attendance rules. A date without a year uses its next occurrence from the forwarding date; explicit years remain unchanged.
 
 ## Multiple Gmail inboxes — 9 September 2026
 

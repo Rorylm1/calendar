@@ -1162,11 +1162,11 @@ export default function CalendarClient() {
               </p>
               {data?.whatsapp?.configured && <section aria-label="WhatsApp connection" className="whatsapp-connection">
                 <div className="connection-heading"><span className="connection-icon"><MessageCircle size={25} strokeWidth={1.4} /></span><div><h3>WhatsApp</h3><p>Forward a plan. Leave the details to your calendar.</p></div><span className="connection-state">{data.whatsapp.processingEnabled ? 'Connected' : 'Capture only'}</span></div>
-                <p className="connection-explainer">{data.whatsapp.processingEnabled ? 'Text messages and clear screenshots become plans automatically. Invitations keep their INVITATION: label. Unclear details stay in Needs details.' : 'Messages are being saved. Automatic calendar entry is not enabled yet.'}</p>
+                <p className="connection-explainer">{data.whatsapp.processingEnabled ? 'Text messages and clear screenshots become confirmed plans automatically. Dates without a year use their next occurrence. Unclear details stay in Needs details.' : 'Messages are being saved. Automatic calendar entry is not enabled yet.'}</p>
                 {data.whatsapp.contactNumber && <a className="error-recovery" href={`https://wa.me/${data.whatsapp.contactNumber}`} target="_blank" rel="noreferrer">Open your calendar in WhatsApp <ArrowUpRight size={14} /></a>}
                 <dl className="connection-facts"><div><dt>Last received</dt><dd>{clockLabel(data.whatsapp.lastReceivedAt)}</dd></div><div><dt>Messages received</dt><dd>{data.whatsapp.capturedMessages}</dd></div><div><dt>Screenshots</dt><dd>{data.whatsapp.screenshotsConfigured && !data.whatsapp.mediaError ? 'Ready' : 'Connection needed'}</dd></div></dl>
                 {(!data.whatsapp.screenshotsConfigured || data.whatsapp.mediaError) && <p className="personal-inline-error">Screenshot downloads need attention. Your text messages still work; unread images are saved for retry.</p>}
-                <p className="connection-small">Only messages you send here are received. Forwarding doesn’t confirm attendance, and no replies or RSVPs are sent.</p>
+                <p className="connection-small">Only messages you send here are received. Forwarding means you’re going. No replies or RSVPs are sent.</p>
               </section>}
               <DeliverySettings events={allEvents} onEdit={event => { setActive(event); setModal('edit'); }} />
             </div>

@@ -7,6 +7,7 @@ import type { GmailProvider } from './gmail.ts';
 import { gmailSourceId } from './gmail-accounts.ts';
 import { downloadWhatsAppImage, WhatsAppMediaError } from './whatsapp-media.ts';
 import { Extraction, ImageReading, type Interpreter } from './interpreter.ts';
+import { resolveWhatsAppYear } from './whatsapp-policy.ts';
 
 type Scan = { mode: 'initial' | 'history' | 'recovery'; baseline: string; query?: string; pageToken?: string; pageIds?: string[]; nextPageToken?: string; finalHistoryId?: string };
 const CHECK_INTERVAL = 4 * 60 * 60 * 1000;
@@ -189,7 +190,7 @@ export class CalendarWorker {
         const manualWhatsApp = source.channel === 'whatsapp' && (source.unsupportedAttachments.length > 0 || source.whatsapp?.imageRead && !source.text.trim());
         if (manualWhatsApp) {
           this.store.transaction(() => {
-            this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: source.whatsapp?.imageReason || 'This attachment could not be read. Enter the booking details.' }, attendance: 'unknown', reason: 'The forwarded image or attachment needs clearer details before an event can be added.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] });
+            this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: source.whatsapp?.imageReason || 'This attachment could not be read. Enter the booking details.' }, attendance: 'confirmed', reason: 'The forwarded image or attachment needs clearer details before an event can be added.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] });
             this.store.sourceStatus(source.id, 'processed', { decision: 'manual_review', reason: 'Attachment needs details', subject: source.subject });
           }); continue;
         }
@@ -205,15 +206,18 @@ export class CalendarWorker {
         const events = this.store.events(); const output = Extraction.parse(await this.interpreter.extract(source, events, this.store.proposals(), signal)); signal?.throwIfAborted();
         const proposals: Omit<Proposal, 'id' | 'createdAt' | 'revision' | 'status'>[] = [];
         for (const candidate of output.proposals) {
-          const rawFields = Object.fromEntries(Object.entries({ ...candidate.event, time: minuteTime(candidate.event.time), endTime: minuteTime(candidate.event.endTime) }).filter(([, value]) => value !== null)); const event = EventFields.parse(rawFields);
+          const rawFields = Object.fromEntries(Object.entries({ ...candidate.event, time: minuteTime(candidate.event.time), endTime: minuteTime(candidate.event.endTime) }).filter(([, value]) => value !== null));
+          const parsed = EventFields.parse(rawFields);
+          const { event, inferredYear } = source.channel === 'whatsapp' && candidate.action === 'create' ? resolveWhatsAppYear(parsed, source) : { event: parsed, inferredYear: false };
           const target = candidate.targetEventId ? events.find(x => x.id === candidate.targetEventId) : undefined;
           const corpus = sourceCorpus(source).replace(/\s+/g, ' ').toLowerCase();
           const evidence = candidate.evidence.filter(text => text.length > 2 && text.length <= 700 && corpus.includes(text.replace(/\s+/g, ' ').toLowerCase())).slice(0, 5);
           if (!evidence.length) throw new Error('Model returned no verifiable source excerpt');
-          const relativeForward = source.channel === 'whatsapp' && (source.whatsapp?.forwarded || source.whatsapp?.mediaId) && /\b(tomorrow|today|tonight|yesterday|(?:next|this|last)\s+(?:week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i.test(source.text);
+          const relativeForward = source.channel === 'whatsapp' && (source.whatsapp?.forwarded || source.whatsapp?.mediaId) && /\b(tomorrow|today|tonight|yesterday|(?:next|this|last)\s+(?:week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i.test(source.text);
           if (relativeForward) { delete event.date; delete event.endDate; }
-          const unresolvedFields = [...new Set([...candidate.unresolvedFields, ...(relativeForward ? ['originalDate', 'date'] : []), ...(source.whatsapp?.forwarded && candidate.action !== 'create' ? ['sourceChronology'] : []), ...(!event.date ? ['date'] : []), ...(candidate.action !== 'create' && !target ? ['targetEventId'] : [])])];
-          proposals.push({ ...(source.channel === 'whatsapp' ? { source: 'WhatsApp' as const } : {}), action: candidate.action, ...(target ? { targetEventId: target.id, targetRevision: target.revision } : {}), event, attendance: candidate.attendance, reason: candidate.reason.slice(0, 1200), evidence, unresolvedFields, sourceMessageIds: [source.id] });
+          const yearOnly = inferredYear && !relativeForward && candidate.unresolvedFields.some(field => ['year', 'originalDate'].includes(field));
+          const unresolvedFields = [...new Set([...candidate.unresolvedFields.filter(field => !(yearOnly && ['year', 'originalDate', 'date'].includes(field))), ...(relativeForward ? ['originalDate', 'date'] : []), ...(source.whatsapp?.forwarded && candidate.action !== 'create' ? ['sourceChronology'] : []), ...(!event.date ? ['date'] : []), ...(candidate.action !== 'create' && !target ? ['targetEventId'] : [])])];
+          proposals.push({ ...(source.channel === 'whatsapp' ? { source: 'WhatsApp' as const } : {}), action: candidate.action, ...(target ? { targetEventId: target.id, targetRevision: target.revision } : {}), event, attendance: source.channel === 'whatsapp' ? 'confirmed' : candidate.attendance, reason: candidate.reason.slice(0, 1200), evidence, unresolvedFields, sourceMessageIds: [source.id] });
         }
         this.store.transaction(() => {
           const proposalIds = proposals.map(proposal => this.store.putProposal(proposal)?.id).filter((id): id is string => Boolean(id));
@@ -223,7 +227,7 @@ export class CalendarWorker {
         if (signal?.aborted) { this.store.sourceStatus(source.id, 'fetched'); this.processingStatus = 'idle'; this.processingError = null; return; }
         if (error instanceof ProcessingPaused) { this.store.sourceStatus(source.id, 'fetched'); this.processingStatus = error.reason; this.processingError = safeError(error); return; }
         if (error instanceof WhatsAppMediaError && error.reason === 'unsupported') {
-          this.store.transaction(() => { this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: 'Send a clear JPEG or PNG screenshot under 5 MB, or enter the booking details.' }, attendance: 'unknown', reason: 'This image could not be safely read.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] }); this.store.sourceStatus(source.id, 'processed'); });
+          this.store.transaction(() => { this.store.putProposal({ source: 'WhatsApp', action: 'create', event: { title: source.subject, kind: 'other', location: '', detail: 'Send a clear JPEG or PNG screenshot under 5 MB, or enter the booking details.' }, attendance: 'confirmed', reason: 'This image could not be safely read.', evidence: [source.subject], unresolvedFields: ['date', 'attachment'], sourceMessageIds: [source.id] }); this.store.sourceStatus(source.id, 'processed'); });
           continue;
         }
         if (error instanceof WhatsAppMediaError) this.store.put('whatsapp_media_error', 'default', { reason: error.reason, at: new Date().toISOString() });

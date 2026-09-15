@@ -20,15 +20,15 @@ function setup(model: Interpreter = interpreter(result()), download = downloadWh
   const c = cfg(); const store = new Store(':memory:', c.CALENDAR_ENCRYPTION_KEY); const worker = new CalendarWorker(c, store, () => { throw new Error('No Gmail access expected'); }, model, download);
   return { c, store, worker, capture(id?: string, patch?: Record<string, unknown>) { captureWhatsAppMessages(store, parseWhatsAppMessages(payload(id, patch), c), true); } };
 }
-test('signed WhatsApp capture enters durable queue before acknowledgement and automatically creates an invitation once', async () => {
+test('signed WhatsApp capture enters durable queue before acknowledgement and automatically creates a confirmed plan once', async () => {
   const f = setup(); const { app } = buildApp(f.c, { store: f.store, worker: f.worker, schedule: false });
   try {
     const raw = JSON.stringify(payload()); const headers = { 'content-type': 'application/json', 'x-hub-signature-256': `sha256=${createHmac('sha256', f.c.WHATSAPP_APP_SECRET).update(raw).digest('hex')}` };
     assert.equal((await app.inject({ method: 'POST', url: '/webhooks/whatsapp', payload: raw, headers })).statusCode, 200);
     assert.equal(f.store.pending().length, 1); assert.equal(f.store.events().length, 0);
-    await f.worker.process(); assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.attendance, 'invited'); assert.equal(f.store.events()[0]!.source, 'WhatsApp');
+    await f.worker.process(); assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.attendance, 'confirmed'); assert.equal(f.store.events()[0]!.source, 'WhatsApp');
     const feed = renderCalendarFeed(f.store).body;
-    assert.match(feed, /SUMMARY:INVITATION: /); assert.match(feed, /STATUS:TENTATIVE/); assert.doesNotMatch(feed, /BEGIN:VALARM/);
+    assert.doesNotMatch(feed, /SUMMARY:INVITATION: /); assert.match(feed, /STATUS:CONFIRMED/);
     await app.inject({ method: 'POST', url: '/webhooks/whatsapp', payload: raw, headers }); f.capture('second-forward'); await f.worker.process(); assert.equal(f.store.events().length, 1);
   } finally { await app.close(); f.store.close(); }
 });
@@ -46,12 +46,12 @@ test('forwarded changes need original chronology; unrelated advertising creates 
     a.capture('cancel'); await worker.process(); assert.equal(a.store.events().length, 1); assert.ok(a.store.proposals().some(p => p.unresolvedFields.includes('sourceChronology')));
   } finally { a.store.close(); }
 });
-test('screenshot transcription is saved before extraction retries and never confirms attendance just from forwarding', async () => {
+test('screenshot transcription is saved before extraction retries and uses forwarding as accepted attendance', async () => {
   let reads = 0; let extracts = 0; let downloads = 0;
   const f = setup({ ...interpreter(), readImage: async () => { reads++; return { text, unclear: false, reason: '' }; }, extract: async () => { extracts++; if (extracts === 1) throw Error('transient'); return result(); } }, async () => { downloads++; return 'data:image/png;base64,synthetic'; });
   try {
     f.capture('image', { type: 'image', image: { id: '333', mime_type: 'image/png' }, text: undefined }); await f.worker.process(); assert.equal(f.store.counts().failedMessages, 1);
-    f.store.retryFailures(); await f.worker.process(); assert.equal(reads, 1); assert.equal(downloads, 1); assert.equal(f.store.events()[0]!.attendance, 'invited');
+    f.store.retryFailures(); await f.worker.process(); assert.equal(reads, 1); assert.equal(downloads, 1); assert.equal(f.store.events()[0]!.attendance, 'confirmed');
   } finally { f.store.close(); }
 });
 test('unreadable images go to Needs details; missing media access does not block text', async () => {
@@ -101,7 +101,7 @@ test('an explicit dated reply can resolve one safely matched missing-date invita
     f.capture('parent', { text: { body: 'Dinner tomorrow at Luca' } }); await f.worker.process(); assert.equal(f.store.proposals()[0]!.status, 'pending');
     f.capture('reply', { context: { id: 'parent' }, text: { body: text } });
     const worker = new CalendarWorker(f.c, f.store, () => { throw Error(); }, interpreter(result())); await worker.process();
-    assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.attendance, 'invited'); assert.equal(f.store.proposals().filter(p => p.status === 'pending').length, 0);
+    assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.attendance, 'confirmed'); assert.equal(f.store.proposals().filter(p => p.status === 'pending').length, 0);
   } finally { f.store.close(); }
 });
 
@@ -110,7 +110,7 @@ test('a collapsed screenshot description still extracts a visible dated invitati
   const f = setup({ ...interpreter(output(fields({ title: 'Woodland Social', date: '2026-09-12', time: undefined, location: '', detail: '' }), { attendance: 'invited', evidence: ['Woodland Social', '12/09/2026'] })), readImage: async () => ({ text: visible, unclear: true, reason: 'Description behind Read more' }) }, async () => 'data:image/png;base64,synthetic');
   try {
     f.capture('collapsed', { type: 'image', image: { id: '333', mime_type: 'image/png' } }); await f.worker.process();
-    assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.title, 'Woodland Social'); assert.equal(f.store.events()[0]!.attendance, 'invited'); assert.equal(f.store.events()[0]!.date, '2026-09-12');
+    assert.equal(f.store.events().length, 1); assert.equal(f.store.events()[0]!.title, 'Woodland Social'); assert.equal(f.store.events()[0]!.attendance, 'confirmed'); assert.equal(f.store.events()[0]!.date, '2026-09-12');
     assert.equal(f.store.proposals().filter(p => p.status === 'pending').length, 0);
   } finally { f.store.close(); }
 });
@@ -133,7 +133,7 @@ test('WhatsApp text and screenshots retain supplied location and description in 
       assert.equal(f.store.events().length, 1); const saved = f.store.events()[0]!;
       assert.equal(saved.title, title); assert.equal(saved.location, location); assert.equal(saved.detail, detail);
       const feed = renderCalendarFeed(f.store).body;
-      assert.ok(feed.includes('LOCATION:Pine Lodge\\, Shropshire')); assert.ok(feed.includes(`DESCRIPTION:${detail}`)); assert.ok(feed.includes(`SUMMARY:INVITATION: ${title}`));
+      assert.ok(feed.includes('LOCATION:Pine Lodge\\, Shropshire')); assert.ok(feed.includes(`DESCRIPTION:${detail}`)); assert.ok(feed.includes(`SUMMARY:${title}`));
     } finally { f.store.close(); }
   }
 });

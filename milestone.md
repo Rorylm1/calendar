@@ -257,3 +257,7 @@ Release verification: backend `20260915T085324Z`, source commit `feba4d2`, Verce
 ## Gmail check frequency — 15 September 2026
 
 Rory requested checks every four hours to reduce activity and cost. Both inboxes use this cadence (six scheduled checks per day per inbox), including error retries. Existing completed inbox schedules are extended from their last successful check on restart. Initial import continuation, WhatsApp delivery and explicit Check now remain available. Model costs mainly depend on new messages interpreted; reducing check frequency does not imply a 75% reduction in model spending.
+
+## WhatsApp owner defaults — 15 September 2026
+
+Rory treats every WhatsApp text or screenshot sent to this calendar as accepted attendance. Valid plans therefore become confirmed events without the INVITATION: prefix, including in the private iPhone feed. A supplied month/day without a year uses its next occurrence on or after the receipt day in Europe/London: current year if not passed, otherwise next year. Retry timing cannot move that anchor. Explicit years are preserved; an absent/illegible day or month still needs details. Relative words such as “tomorrow” without an original date remain ambiguous; this preference resolves missing years, not missing event dates. Gmail attendance rules remain unchanged. No message, reply or RSVP is sent.
